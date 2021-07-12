@@ -525,6 +525,8 @@ git reflog
 4. `git diff [版本标识1] [版本标识2]` 比较版本 1 和版本 2
 5. 可以加上 `-- [多个文件名]` 来指定需要比较的文件
 
+>`git diff --name-only` 只查看变更的文件名
+
 ## git diff
 
 **如果 Stage 中有文件，比较 Stage 和 Working Directory 间所有文件的区别**
