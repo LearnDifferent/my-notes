@@ -108,3 +108,9 @@ Cluster：
 </dependency>
 ```
 
+# GitHub
+
+相关仓库：
+
+- [my-rabbitmq-java-exercises](https://github.com/LearnDifferent/my-rabbitmq-java-exercises)
+- [spring-amqp-sample](https://github.com/LearnDifferent/spring-amqp-sample)
