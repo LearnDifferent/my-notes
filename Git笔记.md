@@ -799,3 +799,7 @@ git reflog
 ```bash
 git ls-files
 ```
+
+# git commit 提交规范
+
+参考：[GitHub 用户 woai3c 的这篇](https://github.com/woai3c/Front-end-articles/blob/master/git%20commit%20style.md)
