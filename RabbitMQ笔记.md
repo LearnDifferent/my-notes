@@ -279,12 +279,16 @@ rabbitmqctl set_policy -p hello ha-policy "^test" '{"ha-mode":"exactly","ha-para
 rabbitmqctl set_policy ha-all "^" '{"ha-mode":"all","ha-sync-mode":"automatic"}' 
 ```
 
+设置完成后，如果需要查看镜像队列的策略，可以使用：
 
+```bash
+rabbitmqctl list_policies
+```
 
 参考资料：
 
+- [docker搭建RabbitMQ单机集群](https://www.jianshu.com/p/aa537ff043bc) <---这个还有介绍 HAProxy 负载均衡的内容
 - [使用docker搭建RabbitMQ集群](https://www.jianshu.com/p/d231844b9c46)
-- [docker搭建RabbitMQ单机集群](https://www.jianshu.com/p/aa537ff043bc)
 - [【集群运维篇】使用docker搭建RabbitMQ集群](https://blog.csdn.net/xia296/article/details/108395796)
 
 ## 管理 RabbitMQ 集群
