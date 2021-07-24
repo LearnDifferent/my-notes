@@ -151,6 +151,8 @@ Cluster：
 
 ## 部署 RabbitMQ 集群
 
+### 搭建集群
+
 **这里使用多个 Docker 容器在本地部署单机多实例 RabbitMQ 集群环境**
 
 启动三个节点，一个主节点，一个从节点。
@@ -227,6 +229,57 @@ exit
 只要去集群中任意一个节点的 Erlang Cookie 所在的位置，将里面的内容拷贝。然后，去该集群的其他节点中，将拷贝的内容，覆盖（剪切）到该节点的 Erlang Cookie 中，就可以了。
 
 注意：因为上面演示的时候，已经在启动节点容器的命令中，加入了 `RABBITMQ_ERLANG_COOKIE='rabbitcookie'` 参数，所以演示的时候，已经将所有节点的  Erlang Cookie，设置为了统一的 "rabbitcookie"。
+
+### 镜像队列 Mirror Queue
+
+搭建了集群后，还要考虑队列的问题。因为队列是从属于节点的。某个节点创建的队列，其他节点是没有的。如果有节点 down 了，那该节点内的队列的数据可能会丢失。
+
+所以需要引入镜像队列，来做备份。假设使用了镜像队列，并且设置要备份一个，那么在节点 1 上创建的队列，RabbitMQ 可能会在节点 3 上自动创建相同数据的队列。如果节点 1 挂了，那么就启用节点 3 上那个之前备份了的队列，并且会在节点 2 上新创建一个新的备份的队列。
+
+---
+
+创建镜像队列，可以使用 Management 的 Web 管理工具：
+
+进入集群内，随便一个节点的管理界面，点击「Admin」标签页，右侧会有一个「Policies」选项，然后点击「Add / update a policy」（这里面的 `/` 表示的是名称为「/」的 Virtual Host），会弹出策略的选项表格，需要填写的选项有：
+
+- Name：策略名称，可以随便起一个
+- Pattern：匹配规则，使用正则表达式
+	- `^` 表示匹配所有名称的队列
+	- `^test` 表示以 "test" 字符串开头的队列
+	- 关于正则表达式（Regular Expression），可以参考：[Simple RegEx Tutorial](https://dl.icewarp.com/online_help/203030104.htm)
+- Definition：镜像队列的主体定义，其中有多个属性（键 / key）：
+	- ha-mode：使用什么模式。模式可以分为（值 / value）：
+		- all：在所有节点都有备份的队列
+		- exactly：在准确个数（个数由 ha-params 决定）的节点上，可以存储队列
+			- 假设 ha-mode 为 exactly，ha-params 为 2，那么会有 2 个节点来存储队列
+			- 其中一个节点是队列原本的节点，另一个节点是随机分配的备份队列
+		- nodes：指定存储的节点上名称（通过 ha-params 指定）
+	- ha-params：模式的相关参数，根据模式的不同，其 value 可以为 Number 和 String 类型
+	- ha-sync-mode：镜像消息同步方式，value 可以为：
+		- automatic：表示自动同步
+		- manually：表示手动同步
+
+填写完选项后，记得点击表格下方的「Add / update a policy」按钮来添加策略。
+
+---
+
+除了使用 Web 端管理工具外，还可以 **随便进入一个集群内的节点中，使用命令行来设置** 。
+
+举例：
+
+在「hello」 Virtual Host 中，设置一个名称为「ha-policy」的策略，匹配所有以「test」为开头的队列，并且只有 2 个节点可以存储+备份队列，同步方式设置为自动：
+
+```bash
+rabbitmqctl set_policy -p hello ha-policy "^test" '{"ha-mode":"exactly","ha-params":2,"ha-sync-mode":"automatic"}'
+```
+
+在「/」 Virtual Host 中，设置一个名称为「ha-all」的策略，匹配所有队列，并且在所有队列上都有备份，同步方式设置为自动（本来应该加上 `-p /` 来表示 Virtual Host 为「/」，不过也可以省略）：
+
+```bash
+rabbitmqctl set_policy ha-all "^" '{"ha-mode":"all","ha-sync-mode":"automatic"}' 
+```
+
+
 
 参考资料：
 
