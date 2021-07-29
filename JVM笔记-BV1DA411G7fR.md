@@ -1,0 +1,629 @@
+# 总体划分
+
+下图为 JDK 的体系结构：
+
+![JDK体系结构](https://gimg2.baidu.com/image_search/src=http%3A%2F%2Ftva1.sinaimg.cn%2Flarge%2F006tNbRwly1gbmnj3i2fyj315m0rc0z8.jpg&refer=http%3A%2F%2Ftva1.sinaimg.cn&app=2002&size=f9999,10000&q=a80&n=0&g=0n&fmt=jpeg?sec=1630150868&t=3c5d9d50f6e74dc7e55a7f7783998eda)
+
+[JVM 的运行时数据区域和直接内存](https://blog.csdn.net/clover_lily/article/details/80087162)：
+
+1. JVM 运行时数据区 Runtime Data Areas：
+    * 由 JVM 管理的区域
+2. 直接内存 Direct Memory：
+    * JVM 之外的内存，开发人员自己分配 / 回收内存。
+
+```java
+public class test{
+
+    public static void main(String[] args) {
+        int a = 1; // 是 main 方法的局部变量 Local Variable，存在栈 Stack 内，是会被运行的部分。注意，也只有运行的时候，才会进入栈 Stack 内。
+
+        Teacher john = new Teacher(); // john 是 main 方法的 Local Variable，等于 john 可以被操作。
+
+        john.stu = new Student(); // john.stu 是 Teacher.class 的全局变量/成员变量 Global Variable。这里表示，让 Teacher john 的 stu 变量指向 new Student();
+    }
+
+
+    class Teacher {
+
+        String name = "John"; // 实例字段的值存在堆 Heap 内（& 类的结构信息存在方法区 Method Area 内）
+        int age = 40; // 是全局变量 global variable，存在堆 Heap（& Method Area）
+        boolean gender_male = true; // Heap（& Method Area）
+        Student stu; // Heap（& Method Area）这个值会指向 Student 对象
+
+
+        static boolean isHuman = true; // 静态字段 （& 类的结构信息存在方法区 Method Area 内
+
+
+        public void shout() {
+            System.out.println("Teacher is shouting.");
+        } // 实例方法存在
+    }
+
+
+    class Student {
+        String name = "Emily";
+        int age = 18;
+        boolean gender_male = false;
+    }
+
+}
+```
+
+## 线程共享部分
+
+线程共享：所有线程都能访问这块内存数据，生命周期贯穿虚拟机 / GC（Garbage Collection）。
+
+线程共享 = **线程不安全**
+
+### 元空间 / 方法区（Metaspace / Method Area）
+
+元空间 / 方法区是被线程共享的，JDK 7 之前被称为永久带，JDK 8 之后为元空间。
+
+> 主要存储元数据信息
+
+元空间 / 方法区内只有：`static` 静态变量、`final` 常量、`Class` 类信息（构造方法、接口定义）和运行时的常量池。
+
+> 注意，实例变量存在堆内存（Heap）中，和方法区无关
+
+* 作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
+* GC 垃圾回收的效率低：
+    1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
+    2. 只要该类对象还有被引用，就不能被回收
+
+### 堆内存 Heap
+
+> 栈主要管运行，堆主要管存储
+>
+> 主要存储对象
+
+* **Heap** 主要**存储对象**
+* **Stack** 存储的主要是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
+* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
+    * JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
+    * 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
+
+例子：User u = new User();
+
+* `new` 关键字会在 Heap 中创建新的 User 对象
+* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息（也就是 *存放地址* ），会指向 Heap 中的 User 对象
+
+堆内存也是被线程共享的。
+
+* 堆的定义：
+    * Student stu = new Student();
+    * new Student() 为 *Heap / 堆*，是被引用到部分
+        * Stack 引用 Heap / Stack -> Heap
+* 作用：存放对象实例 Instance。几乎所有的对象、数组都存在这里。
+
+> 详细请看 GC 部分的
+
+## 线程独占部分 / 线程私有
+
+线程独占部分：每个线程都有独立空间，生命周期等于线程的生命周期。
+
+线程私有 = **线程安全 Thread Safety**
+
+### 虚拟机栈 Java Virtual Machine Stacks
+
+* 每个线程运行的时候，Stacks 都会开辟一个区域给线程，线程的每个方法，每个方法需要的每个局部变量等，都会在 Stacks 中按照顺序执行
+* 操作数栈：
+    * 临时存放并操作数值的内存空间。
+    * 先把数值放入其中
+    * 如果需要赋值局部变量，就将数值放到需要的局部变量内
+    * 如果需要计算，就弹出 2 个最近的值，然后根据加减乘除对这 2 个值进行运算，结束后重新押回操作数栈
+
+
+Java Virtual Machine Stacks・仮想マシン・スタック
+
+> For every thread, JVM creates a separate stack at the time of thread creation. The memory for a Java Virtual Machine stack does not need to be contiguous. The Java virtual machine only performs two operations directly on Java Stacks: it pushes and pops frames. And stack for a particular thread may be termed as *Run – Time Stack*.
+>
+> Each and every method call performed by that thread is stored in the corresponding *run time stack* including parameters, local variables, intermediate computations, and other data.
+>
+> After completing a method, corresponding entry from the stack is removed. After completing all method calls the stack becomes empty and that empty stack is destroyed by the JVM just before terminating the thread.
+>
+> The data stored in the stack is available for the corresponding thread and not available to the remaining threads. Hence we can say local data is thread safe. Each entry in the stack is called *Stack Frame* or Activation Record.
+
+![](https://media.geeksforgeeks.org/wp-content/uploads/JVM.jpg)
+
+Stack Frame Structure
+
+> The stack frame basically consists of three parts: Local Variable Array, Operand Stack & Frame Data.
+>
+> When JVM invokes a Java method, first it checks the class data to determine the number of words (size of the local variable array and operand stack, which are measured in words for each individual method) required by the method in the local variables array and operand stack. It creates a stack frame of the proper size for invoked method and pushes it onto the Java stack.
+
+1. 局部变量表 Local Variable Table/Array (LVA):
+    * The local variables part of stack frame is organized as a zero-based array of words.
+    * It contains all parameters and local variables of the method.
+    * 包含了<u>**本地变量（Local Variables/Vars）、输入参数和输出参数（Parameters）以及方法内的变量**</u>
+2. 栈操作 Operand Stack (OS):
+    * JVM uses operand stack as work space like rough work or we can say for storing intermediate calculation’s result.
+    * Operand stack is organized as array of words like local variable array. But this is not accessed by using index like local variable array rather it is accessed by some instructions that can push the value to the operand stack and some instructions that can pop values from operand stack and some instructions that can perform required operations.
+    * **记录出栈、入栈的操作**
+3. 栈帧数据 Frame Data (FD):
+    * It contains all symbolic reference (constant pool resolution) and normal method return related to that particular method.
+    * It also contains a reference to Exception table which provide the corresponding catch block information in the case of exceptions.
+
+节选自：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)，可以用[用印象笔记打开](https://app.yinxiang.com/shard/s72/nl/16998849/b2dc562e-3b7c-4816-8983-5f019c6cd369/)
+
+***
+
+> 栈主要管运行，堆主要管存储
+>
+> 栈存放的内容和程序运行相关，主要存储函数运行过程中的临时变量
+
+* **Stack** 存储的是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
+* **Heap** 主要**存储对象**
+* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
+    * JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
+    * 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
+
+例子：User u = new User();
+
+* `new` 关键字会在 Heap 中创建新的 User 对象
+* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息，会指向 Heap 中的 User 对象
+
+> 栈内存不存在垃圾回收问题
+
+栈内存，主要管理程序的运行，生命周期和线程同步：
+
+* 线程结束的时候，栈内存也就释放了（注意，main 也是一个进程）
+* 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
+* 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
+
+***
+下面的待整理，不知道是对还是错
+
+栈帧结构
+
+方法索引（method index）
+
+输入输出参数（Parameters）
+
+本地变量（Local vars）
+
+类（Class）
+
+父帧（Return Frame）
+
+子帧（Next Frame）
+
+***
+
+> 栈分为<u>栈顶</u>和<u>栈底</u>，每一个栈压住的程序正在执行的方法。
+
+> 栈帧：是一个内存区块，是一个数据集，是一个有关方法和运行期数据集
+
+> 如果栈满了，就会出现 StackOverflowError。
+
+栈 + 堆 + 方法区的交互关系：
+
+* 栈帧里面的引用，指向了堆里面的对象具体实例
+* 对象具体实例里面的`final`常量，指向方法区
+
+知识点：
+
+* 栈 Stack：
+
+    * 定义：我们编写的每一个 method 都会放到 Stack 里面运行
+    * Student stu = new Student();
+    * stu 为 *Stack / 栈*，是会被执行操作的部分
+        * Stack 引用 Heap / Stack -> Heap
+    * 平时说的 Stack 指的就是 Java Virtual Machine Stacks（JVM Stacks）
+
+* 栈帧 Stack Frame：
+
+    * 在 Stack 内，表示被执行的一个方法。
+    * 如果该 Stack Frame 调用了另外一个方法，就会生成新的 Stack Frame。
+    * 以此类推，所有 Stack Frame 就会像 stack 一样，先进后出（最后被调用的方法，最先被执行）。
+
+* 局部变量表 Local Variable Table 与栈帧 Stack Frame：
+
+    * 当一个方法被执行时，会生成一个 Stack Frame，这个 Stack Frame 会生成一个 Local Variable Table，把所有的 Local Variable 压缩进来。
+    * 这就是局部变量 Local Variable 也属于栈内到原因
+
+* 操作数栈 Operand Stack 与栈帧 Stack Frame：
+
+    * [当一个方法刚刚开始执行时，其操作数栈是空的，随着方法执行和字节码指令的执行，会从局部变量表或对象实例的字段中复制常量或变量写入到操作数栈，再随着计算的进行将栈中元素出栈到局部变量表或者返回给方法调用者，也就是出栈/入栈操作。一个完整的方法执行期间往往包含多个这样出栈/入栈的过程。](https://zhuanlan.zhihu.com/p/45354152)
+    * [操作数栈(Operand Stack)也常称为操作栈，它是一个后入先出栈(LIFO)。同局部变量表一样，操作数栈的最大深度也在编译的时候写入到方法的Code属性的max_stacks数据项中。操作数栈的每一个元素可以是任意Java数据类型，32位的数据类型占一个栈容量，64位的数据类型占2个栈容量,且在方法执行的任意时刻，操作数栈的深度都不会超过max_stacks中设置的最大值。](https://zhuanlan.zhihu.com/p/45354152)
+    * [**The operand stack is used during the execution of byte code instructions** in a similar way that general-purpose registers are used in a native CPU. Most JVM byte code spends its time manipulating the operand stack by pushing, popping, duplicating, swapping, or executing operations that produce or consume values. Therefore, instructions that move values between the array of local variables and the operand stack are very frequent in byte code. For example, a simple variable initialization results in two byte codes that interact with the operand stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
+
+* 动态引用 Dynamic Linking 与栈帧 Stack Frame：
+
+    * 动态引用：存在于 Stack Frame 内，用于找到方法区 Method Area / Metaspace 里面的方法代码
+
+* 返回值地址 Return Address 与栈帧 Stack Frame：
+
+    * 一个 Stack Frame /运行的方法在结束后，会得到一个值，这个值要返回到之前的方法内：
+        * main 方法的 Stack Frame 里面有一个 int result = calculate();
+        * 此时会生成 calculate() 方法的 Stack Frame，然后优先计算出结果。这个结果需要返回到 main 方法内，赋值给 main 方法的 int result
+    * Return Address 就是在 Stack Frame 划出一块区域，用于储存需要 return 的前一个 stack 的内存地址
+
+### 本地方法栈 Native Method Stack
+
+存放 JVM 底层的 C 和 C++ 等语言实现的 Java 方法。
+
+> [Not all JVMs support native methods, however, those that do typically create a per thread native method stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
+
+> [本地方法栈(Native Method Stack)和Java虚拟机栈类似，区别在于Java虚拟机栈是为了Java方法服务的，而本地方法栈是为了native方法服务的。在虚拟机规范中并没有对本地方法实现所采用的编程语言与数据结构采取强制规定，因此不同的JVM虚拟机可以自己实现自己的native方法。](https://app.yinxiang.com/shard/s72/nl/16998849/74009fbe-a516-41e2-8920-f48cc4593957/)
+
+### 程序计数器 Program Counter Register
+
+* 假设在运行一个线程的某个方法时候，有优先级更高的线程抢占了 CPU 资源，此时之前的线程被挂起，等 CPU 资源空闲后再继续，为了继续线程的时候能回到之前执行的方法，就需要 *程序计数器*
+
+就是一个指向方法区的指针，指向程序当前运行的位置。
+
+PC Register：
+
+> [程序计数器其实就是一个指针，它指向了我们程序中下一句需要执行的指令，它也是内存区域中唯一一个不会出现 OutOfMemoryError 的区域，而且占用内存空间小到基本可以忽略不计。这个内存仅代表当前线程所执行的字节码的行号指示器，字节码解析器通过改变这个计数器的值选取下一条需要执行的字节码指令。如果执行的是 native 方法，那这个指针就不工作了。](https://app.yinxiang.com/shard/s72/nl/16998849/c39de305-2e8a-4989-bf7b-ca4ec847d4d1/)
+
+# 知识点
+
+## JVM 的位置
+
+JRE（包含了 JVM）在 OS 之上，OS 在硬件体系之上。
+
+## JVM 的体系结构
+
+运作流程：
+
+* 最开始的文件是 `.java`，通过 `java -c` 命令编译成 `.class` 文件，然后通过 `Class Loader`/类加载器，加载到 JVM 的 运行时数据区/`Runtime Data Area`。
+
+Runtime Data Area：
+
+- Method Area/方法区
+- (Java) Stack Area
+- Native Method Stack
+- Heap Area
+- PC 计数器
+
+> 垃圾回收只会发生在 Method Area 和 Heap，JVM 调优基本上就是调整这两个地方。
+
+## 类加载器和双亲委派机制
+
+ClassLoader 的作用：
+
+* 加载 class 文件
+
+> 类是抽象的，对象是具体的（new 关键字）。
+
+双亲委派机制（親委譲モデル/Parents Delegation Model）：APP->EXC->BOOT（最终执行）
+
+* AppClassLoader 的父类是 ExtClassLoader，而 ExtClassLoader 的父类是 BootClassLoader
+* 如果在最高的 BOOT 执行了，就不会去底下的执行
+* 如果 BOOT 和 EXC 加载器都没有的情况下，就使用当前的 APP 加载器
+
+流程：
+
+1. 类加载器收到类加载的请求
+2. 将这个请求向上委托给父加载类，指导启动类加载器/根加载器/Boot
+3. 启动类加载器检查是否能够加载当前这个类，能加载就使用当前的加载器。否则，抛出异常，通知子加载器进行加载
+4. 重复上一步
+
+> 这就是 Class Not Found 的原理
+
+## sandbox/沙箱/沙盒安全机制
+
+基本组件：
+
+- 字节码校验器/Bytecode verifier：确保 Java 类文件遵循 Java 语言规范，保护内存。像 java. 和 javax. 这样的类就不会经过 bytecode verifer
+- 类加载器/class loader：
+	1. 使用双亲委派机制，防止恶意代码干涉善意代码，也就是不让你修改 Java 原来的代码
+	2. 守护了信任的类库的边界
+	3. 将代码归入保护域，确定了代码可以进行哪些操作
+
+类加载器内有：
+- 存取控制器/access controller：可以控制核心 API 堆操作系统的存取权限，也就是可以操作我们的 OS（比如使用 `new Robot()`）
+- 安全管理器/security manager：实现权限控制，比 access controller 优先级高
+- 安全软件包/security package： java.security 下的类和扩张包下的类，允许用户为应用增加新的安全特性
+
+## Native
+
+只要带了 `native` 关键字，说明 Java 超过了 Java 的作用范围，会进入本地方法栈/`Native Method Stack`，然后调用本地方法接口/JNI（Java Native Interface）
+- Native Method Stack 是 Java 专门开辟一块调用 C 和 C++ 的区域
+- 用于登记 native 方法
+- 在执行的时候，通过 JNI，加载本地方法库中的方法
+
+## 三种 JVM
+
+1. Sun 的 HotSpot
+2. BEA 的 JRockit
+3. IBM 的 J9 VM
+
+# GC
+
+> GC 的作用区域只有方法区和堆
+>
+> 基本上回收都是新生区
+
+## 堆（Heap）
+
+Heap：一个 JVM 只有一个堆内存。堆内存的大小是可以调节的。
+
+类加载器读取了类文件后，会把类、方法、常量和变量放进堆中，堆会帮我们保存引用类型的真实对象。
+
+JDK 8 之前堆内存中分为三个区域：
+
+- Young Generation Space（新生区）：
+	1. Eden Space（伊甸园区）
+	2. Survivor Space
+    	1. Survivor Space 0
+              	* 可以简写为 S0，中文是：幸存 0 区
+              	* 根据情况，可以叫做 From Survivor Space 或 To Survivor Space
+    	2. Survivor Space 1
+              	* 可以简写为 S1，中文是：幸存 1 区
+              	* 根据情况，可以叫做 From Survivor Space 或 To
+- Old Generation Space / Tenured Space（养老区/老年区/老年代）
+- Permanent Generation(non-heap)：永久区/永久存储区，其实不在堆上（JKD 8 后叫元空间）
+
+> 在 JDK 8 以后，永久存储区改名为元空间。
+
+幸存区是新生区和养老区之间的过渡，其中的幸存 0 区和幸存 1 区会动态交互。
+
+垃圾回收主要：
+
+* 轻 GC（Minor GC/Young GC） -> 新生区（主要是在伊甸园区）
+* 重 GC（Major GC/Full GC） -> 养老区
+
+> 如果堆内存满了，就会 OOM/OutOFMemoryError
+
+
+新生区：
+- 类：诞生和成长的地方，大部分情况下还会死亡
+- 伊甸园区：所有的对象都是在这里 new 出来的
+- 幸存区（From, to）：99% 的对象是临时对象，在幸存区就会死去，不会进入养老区
+
+元空间/永久区（方法区在这里，方法区里面的常量池肯定也在这里）：
+- 用来存放 JDK 自身携带的 Class 对象、interface 元数据。
+- 也就是用来存储 Java 运行时的环境或类信息
+- 这个区域不存在垃圾回收。关闭 JVM 就会释放这个区域的内存
+- 一个启动类加载了大量第三方 jar 包或者 tomcat 部署了太多的应用，或者加载了大量动态生成的反射类，才会在这个区域出现 OOM
+
+元空间，逻辑上存在于堆中，物理上不存在于堆中，所以也被叫做「非堆」。（物理上新生区和老年区基本占用了全部堆内存）
+
+默认情况下，分配的总内存是电脑内存的 1/4，初始化的内存是电脑内存的 1/64
+
+如果出现了 OOM：
+1. 用参数调优，扩大堆内存查看结果
+2. 分析内存，看一下哪个地方有问题（需要使用专业工具）
+
+## GC 基础
+
+GC 过程：
+
+在 Young Generation Space 中，当 Eden Space 快满的时候，会触发 Young GC。
+
+首先会在 Eden Space 中，将要删除的对象做上标记，没有被标记的对象就转移到 Survivor Space 中（S0 或 S1 都有可能）。
+
+> *S0* : *S1* : *Eden Space* = 1:1:8
+
+假设不需要删除的对象，全部转移到了 S0 后，就会将 S1 和 Eden Space 的所有对象清除。
+
+等下一次 Eden Space 快满的时候，会将 S0 和 Eden Space 的中不需要删除的对象，转移到 S1，然后将 S0 和 Eden Space 删除。
+
+也就是「S0 + Eden」「S1 + Eden」这样循环清理。
+
+如果某个对象在一次 Young GC 之后仍然存活，JVM will increment the reachable object's age by 1，等某个对象的 age 达到 15 之后，该对象 will be moved to the tenured space（也就是 Old Generation Space）。This process is called “premature promotion”
+
+> -XX:MaxTenuringThreshold 可以用来设定 age 达到多少后，转移到 Old Generation Space（Tenured Space），默认 age 为 15
+
+Tenured Space 除了存储 age 达到 15 的对象之外，还存储「大对象」。大对象类似于长度为 99999999 的数组。
+
+如果 Old Generation Space（Tenured Space）也满了，就会触发 Full GC。
+
+Full GC 会采用 **标记清除法**，而 Minor GC 采用的是 **复制算法**。
+
+***
+
+> 内存中已经不再被使用到的空间就是垃圾
+> 也就是，没有引用指向的对象，就是垃圾
+
+GC Roots：
+
+* GC Roots 是指一组必须活跃的引用。
+* 使用 GC Roots /“可达性分析算法”来判断对象是否存活，只要 GC Roots 能找到该对象，就说明存活，反之则不存活。
+
+GC Roots 基本思路：
+
+* 通过一系列名为「GCRoots」的对象作为起始点，从这个被称为 GC Roots 的对象开始向下搜索，如果一个对象到 GC Roots 没有任何引用链相连时，则说明此对象不可用
+* 也即给定一个集合的引用作为根出发，通过引用关系遍历对象图，能被遍历到的（可到达的）对象就被判定为存活，没有被遍历到的就自然被判定为死亡
+* 更多 GC Roots 内容，参考[JVM之GCRoots概述](https://blog.csdn.net/weixin_41910694/article/details/90706652)
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d053c7d6f7724a11a32ecda6c7104b2e~tplv-k3u1fbpfcp-zoom-1.image)
+
+Java 中可以作为 GC Roots 的对象（注意，这些对象不会被回收）：
+
+* 虚拟机栈（栈帧中的本地变量表）中引用的对象
+* 方法区中类静态属性引用的对象
+* 方法区中常量引用的对象
+* 本地方法栈中JNI（也就是 Native 方法）引用的对象
+
+示例（参考：[什么是GC Roots](https://www.cnblogs.com/rumenz/articles/14099927.html)）：
+
+虚拟机栈中引用的对象：
+
+```java
+public class Rumenz{
+    public static void main(String[] args) {
+        Rumenz a = new Rumenz();
+        a = null;
+    }
+}
+```
+
+a 是栈帧中的本地变量，a 就是 GC Root。
+
+由于 a=null，a 与 new Rumenz() 对象断开了链接，所以该对象会被回收。
+
+***
+
+方法区类的静态成员引用的对象：
+
+```java
+public class Rumenz{
+    public static Rumenz = r;
+    public static void main(String[] args){
+       Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
+       a.r = new Rumenz(); // 这个 Rumenz 不会被回收
+       a = null;
+    }
+}
+```
+
+栈帧中的本地变量 a = null，由于 a 断开了与 GC Root 对象（a对象）的联系，所以 a 对象会被回收。
+
+由于给 Rumenz 的成员变量 r 赋值了变量的引用，并且 r 成员变量是静态的,所以 r 就是一个 GC Root 对象，所以 r 指向的对象不会被回收。
+
+***
+
+方法区常量引用的对象：
+
+```java
+public class Rumenz{
+    public static final Rumenz r = new Rumenz(); // 这个 Rumenz 不会被回收
+
+    public static void main(String[] args){
+       Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
+       a = null;
+    }
+}
+```
+
+常量 r 引用的对象，不会因为 a 引用的对象的回收而被回收。
+
+***
+
+本地方法栈中 JNI（Native 方法）引用的对象：
+
+本地方法就是一个 Java 调用非 Java 代码的接口，该方法并非 Java 实现的，可能由 C 或 C++ 等其他语言实现的。Java 通过 JNI 来调用本地方法，而本地方法是以库文件的形式存放的（在 WINDOWS 平台上是 DLL 文件形式，在 UNIX 机器上是 SO 文件形式）。
+
+通过调用本地的库文件的内部方法，使 Java 可以实现和本地机器的紧密联系，调用系统级的各接口方法。
+
+当调用 Java 方法时，虚拟机会创建一个 Stack Frame 并压入 Java 栈，而**当调用本地方法时，虚拟机会保持 Java 栈不变，不会压入新的 Stack Frame，虚拟机只是简单地动态连接并直接调用指定的本地方法**。
+
+## 使用 JProfiler
+
+如果一个项目出现 OOM 故障：
+1. 通过 Debug，一行行分析代码
+2. 通过内存快照分析工具 MAT 或 JProfiler，查看第几行代码出错
+
+在 IDEA 中安装插件，并下载对应 OS 的安装包。
+
+使用命令行 `-Xms1m -Xmx8m -XX:+HeapDumpOnOutOfMemoryError`，来产生 dump 文件。然后打开 JProfiler 进行分析。
+
+`-Xms` 是设置化初始化内存大小
+`-Xmx` 设置最大分配内存
+`-XX:+PrintGCDetails`：打印 GC 垃圾回收信息
+`-XX:+HeapDumpOnOutOfMemoryError`：OOM Dump
+
+## GC 算法
+
+GC 常用算法：
+
+* 标记清除法
+* 标记整理法/标记压缩
+* 复制算法
+* 引用计数器（一般不用）
+
+### 复制算法
+
+简单来说，就是**先标记一个区域内的所有对象，是否需要被删除，等一个区域快满了之后，把不需要删除的对象，紧凑地复制到另一个区域中**，这样的做法开销比较小，但是需要 2 倍的内存空间。
+
+谁空，谁是 to：幸存 0 区和 1 区，谁是空的，谁就是 to。0 和 1 区会相互交替。
+
+* 每次 GC 都会将伊甸园区活着的对象，移到幸存区中
+* 一旦伊甸园区被 GC 后就是空的
+
+当对象在伊甸园区中存活，就会跑去幸存区，当对象跑去 0 区时，1 区就是空的，所以 1 区就是 to。
+
+如果两个区都有 1 个对象，那么首先会将其中一个区内的对象移到另一个区，然后移空的区域就是 to 区，有 2 个对象的就是 from 区
+
+默认当一个对象经历了 15 次 GC 后还没有死，就进入养老区。可以使用 `-XX:MaxTenuringThreshlod=5`，让对象在经历 5 次 GC 后还没死亡的情况下进入养老区
+
+每次 GC，伊甸园区和 to 区都是空的，对象都在 from 区内（在没有存放对象前，from 区叫做 to 区）
+
+主要用于伊甸园和幸存。
+
+* 好处：没有内存的碎片
+* 坏处：浪费了一个幸存区的内存空间（to 区永远是空的）。最极端的情况下就是对象永久存活。
+
+复制算法最佳使用场景是对象存活度较低的时候，也就是在新生区内。
+
+### 标记清除法
+
+扫描对象，对活着的对象进行标记，然后清除没有被标记的对象
+
+优点：不需要额外的空间
+缺点：两次扫描严重浪费时间，会产生内存碎片（假设在内存空间上有 3 个连续的对象。其中两个存活的对象之间，如果有一个死亡对象被清除了，那个死亡对象留下的内存空间就变成了碎片，使得内存不连续）
+
+### 标记压缩
+
+对「标记清除法」对优化。
+
+压缩：防止内存碎片的产生，让内存空间有连续性。
+
+压缩就是再一次扫描，让存活对象移动到同一侧
+
+缺点，多了一个移动成本
+
+所以可以等清除几次之后，再统一压缩
+
+### GC 算法总结
+
+内存效率/时间复杂度：复制算法> 标记清除算法> 标记压缩算法
+
+内存整齐度：复制算法=标记压缩算法> 标记清除法
+
+内存利用率：标记压缩算法=标记清除算法>复制算法
+
+没有最好的算法，只有最合适的算法。所以 GC 也叫分代收集算法。
+
+年轻代：存活率低，所以使用复制算法
+
+老年代：存活率高，区域大，所以使用标记清除+标记压缩混合实现（调优就在这里）
+
+# JMM / Java memory model
+
+Java 内存模型
+
+作用：缓存一致性协议，用于定义数据读写的规则
+
+JVM 有一个主内存，每个线程在使用数据的时候，要先去主内存拷贝一份数据到自己的线程工作内存区域中。只要是相互拷贝的，就有可能出现数据不一致的情况
+
+JMM 定义了主内存/Main Memory 和线程工作内存之间的抽象关系。
+
+线程之间的共享变量存储在 Main Memory 中，每个线程都有一个私有的本地内存/Local Memory
+
+要解决共享对象可见性的问题，可以加 volatile 关键字或加锁。
+
+JMM 是抽象概念，对八种指令的使用，制定了相应规则。
+
+指令重排，原子性问题
+
+# 参考资料
+
+- [【狂神说Java】JVM快速入门篇](https://www.bilibili.com/video/BV1iJ411d7jS)
+- [全套JVM视频教程，全网播放超百万的jvm教程（深入理解Java虚拟机）](https://www.bilibili.com/video/BV1DA411G7fR)
+- [网易Java高级系列直播课（2月）](https://study.163.com/course/courseLearn.htm?courseId=1209696848#/learn/live?lessonId=1280291272&courseId=1209696848)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
