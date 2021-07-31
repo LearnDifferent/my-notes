@@ -108,3 +108,466 @@ Java 虚拟机每调用一个 Java 方法，便会创建一个栈帧。
 - 对于 boolean、char 这两个无符号类型来说，加载伴随着零扩展。举个例子，char 的大小为两个字节。在加载时 char 的值会被复制到 int 类型的低二字节，而高二字节则会用 0 来填充。
 - 对于 byte、short 这两个类型来说，加载伴随着符号扩展。举个例子，short 的大小为两个字节。在加载时 short 的值同样会被复制到 int 类型的低二字节。如果该 short 值为非负数，即最高位为 0，那么该 int 类型的值的高二字节会用 0 来填充，否则用 1 来填充。
 
+# JVM 如何加载 Java 类
+
+## 两大类型和字节流
+
+Java 语言的类型：
+
+- 基本类型（primitive types）
+	- 基本类型由 Java 虚拟机预先定义好
+- 引用类型（reference types）
+	- 泛型参数：会在编译过程中被擦除
+	- 数组类：由 Java 虚拟机直接生成
+	- 类：有对应的字节流
+	- 接口：有对应的字节流
+
+字节流的形式：
+
+- 由 Java 编译器生成的 class 文件
+- 在程序内部直接生成
+- 从网络中获取（例如网页中内嵌的小程序 Java applet）字节流
+
+不同形式的字节流都会被加载到 Java 虚拟机中，成为类或接口。
+
+> 为了叙述方便，下面会用 *类* 来统称来统称它们。
+
+无论是直接生成的数组类，还是加载的类，Java 虚拟机都需要对其进行链接和初始化。
+
+Java 虚拟机将字节流转化为 Java 类的过程：
+
+1. 加载
+2. 链接
+3. 初始化
+
+## 加载
+
+**加载是指查找字节流，并且据此创建类的过程**
+
+**数组类没有字节流，所以由 JVM 直接生成，而其他类，JVM 需要借助 Class Loader（类加载器）来完成查找字节流的过程**
+
+类加载器相当于建筑设计师，类就相当于房型。
+
+而所有“建筑师”的鼻祖，就是 **启动类加载器（boot class loader）** ：
+
+- 启动类加载器是由 C++ 实现的，没有对应的 Java 对象
+- 在 Java 中只能用 null 来指代
+- 相当于，建筑师的鼻祖不希望被打扰，所以没有留下联系方式
+
+除了 boot class loader， **其他的类加载器都是 `java.lang.ClassLoader` 的子类** ，所以有对应的 Java 对象。
+
+**加载需要借助类加载器，在 Java 虚拟机中，类加载器使用了双亲委派模型，即接收到加载请求时，会先将请求转发给父类加载器**
+
+双亲委派机制：
+
+- 每当一个类加载器接收到加载请求时，它会先将请求转发给父类加载器
+- 在父类加载器没有找到所请求的类的情况下，该类加载器才会尝试去加载
+- 相当于建筑师接单后，需要先给其师傅过目，师傅不接手，才能自己来做
+
+> 在 Java 9 之前，启动类加载器负责加载最为基础、最为重要的类，比如存放在 JRE 的 lib 目录下 jar 包中的类（以及由虚拟机参数 `-Xbootclasspath` 指定的类）。
+
+> 除了启动类加载器之外，另外两个重要的类加载器是扩展类加载器（extension class loader）和应用类加载器（application class loader），均由 Java 核心类库提供。
+
+> 扩展类加载器的父类加载器是启动类加载器。它负责加载相对次要、但又通用的类，比如存放在 JRE 的 lib/ext 目录下 jar 包中的类（以及由系统变量 java.ext.dirs 指定的类）
+
+> Java 9 引入了模块系统，[并且略微更改了上述的类加载器](https://docs.oracle.com/javase/9/migrate/toc.htm#JSMIG-GUID-A868D0B9-026F-4D46-B979-901834343F9E) —— 扩展类加载器被改名为平台类加载器（platform class loader）
+
+> Java SE 中除了少数几个关键模块，比如说 java.base 是由启动类加载器加载之外，其他的模块均由平台类加载器所加载。
+
+除了由 Java 核心类库提供的类加载器外，我们还可以加入自定义的类加载器，来实现特殊的加载方式。
+
+举例来说，我们可以对 class 文件进行加密，加载时再利用自定义的类加载器对其解密。
+
+**除了加载功能之外，类加载器还提供了命名空间的作用** ：
+
+- 在 Java 虚拟机中，类的唯一性是由类加载器实例以及类的全名一同确定的
+- 即便是同一串字节流，经由不同的类加载器加载，也会得到两个不同的类
+- 在大型应用中，我们往往借助这一特性，来运行同一个类的不同版本
+
+也就是说，如果你剽窃了另一个建筑师的设计作品，那么只要你标上自己的名字，这两个房型就是不同的
+
+## 链接
+
+**链接，是指将创建成的类合并至 JVM 中，使之能够执行的过程**
+
+JVM 不会直接使用 `.class` 文件，类加载链接的目的就是在 JVM 中创建相应的类结构，并将其存储在元空间
+
+链接的三个阶段：
+
+1. 验证
+	- 目的：确保被加载类能够满足 JVM 的约束条件
+	- 相当于，建筑设计必须被审核通过，才能建造房子
+2. 准备
+	- 目的：为被加载类的静态字段分配内存
+		- Java 代码中对静态字段的具体初始化，会在稍后的初始化阶段中进行
+		- 过了这个阶段，算是盖好了毛坯房，虽然结构已经完整，但是在没有装修之前不能住人
+	- 除了分配内存外，部分 Java 虚拟机还会在此阶段构造其他跟类层次相关的数据结构
+		- 构造与该类相关联的方法表
+		- 比如：用来实现虚方法的动态绑定的方法表
+3. 解析
+	- 在 class 文件被加载至 JVM  之前，这个类无法知道其他类及其方法、字段所对应的具体地址，甚至不知道自己方法、字段的地址
+	- 因此，每当需要引用这些成员时，Java 编译器会生成一个符号引用
+	- 在运行阶段，这个符号引用一般都能够无歧义地定位到具体目标上
+		- 对于一个方法调用，编译器会生成一个包含目标方法所在类的名字、目标方法的名字、接收参数类型以及返回值类型的符号引用，来指代所要调用的方法
+	- 解析阶段的目的：将这些符号引用 解析 成为实际引用
+		- 如果符号引用指向一个未被加载的类，或者未被加载类的字段或方法，那么解析阶段将触发这个类的加载（但未必触发这个类的链接以及初始化）
+		- 在盖房子的语境下，不管 A 的房子是否实际存在，都可以用这个说法指代 A 的房子
+		- 实际引用就相当于 B 建筑师的电话，真的需要建房子的时候，就联系 B 建筑师去盖房子
+	- 解析阶段为非必须的，JVM  规范并没有要求在链接过程中完成解析
+		- 它仅规定了：如果某些字节码使用了符号引用，那么在执行这些字节码之前，需要完成对这些符号引用的解析
+
+## 初始化
+
+**初始化，则是为标记为常量值的字段赋值，以及执行 `< clinit >` 方法的过程**
+
+- 在 Java 代码中，如果要初始化一个静态字段，我们可以在声明时直接赋值，也可以在静态代码块中对其赋值
+- 如果直接赋值的静态字段被 final 所修饰，并且它的类型是基本类型或字符串时，那么该字段便会被 Java 编译器标记成常量值（Constant Value），其初始化直接由 Java 虚拟机完成
+- 除此之外的直接赋值操作，以及所有静态代码块中的代码，则会被 Java 编译器置于同一方法中，并把它命名为 `< clinit >`
+
+**Java 虚拟机会通过加锁来确保类的 `< clinit >` 方法仅被执行一次**
+
+- 只有当初始化完成之后，类才正式成为可执行的状态
+- 相当于，装修房子后，才能住人
+
+那么，类的初始化何时会被触发呢？JVM 规范枚举了下述多种触发情况：
+
+1. 当虚拟机启动时，初始化用户指定的主类；
+2. 当遇到用以新建目标类实例的 new 指令时，初始化 new 指令的目标类；
+3. 当遇到调用静态方法的指令时，初始化该静态方法所在的类；
+4. 当遇到访问静态字段的指令时，初始化该静态字段所在的类；
+5. 子类的初始化会触发父类的初始化；
+6. 如果一个接口定义了 default 方法，那么直接实现或者间接实现该接口的类的初始化，会触发该接口的初始化；
+7. 使用反射 API 对某个类进行反射调用时，初始化这个类；
+8. 当初次调用 MethodHandle 实例时，初始化该 MethodHandle 指向的方法所在的类。
+
+---
+
+因为类的初始化仅会被执行一次，所以这个特性被用来实现 *单例的延迟初始化* ：
+
+```java
+public class Singleton {
+    private Singleton() {}
+
+    private static class LazyHolder {
+        static final Singleton INSTANCE = new Singleton();
+    }
+
+    public static Singleton getInstance() {
+        return LazyHolder.INSTANCE;
+    }
+}
+```
+
+只有当调用 `Singleton.getInstance` 时，程序才会访问 `LazyHolder.INSTANCE `，才会触发对 `LazyHolder` 的初始化（当遇到访问静态字段的指令时，初始化该静态字段所在的类），继而新建一个 `Singleton` 的实例。
+
+由于类初始化是线程安全的，并且仅被执行一次，因此程序可以确保多线程环境下有且仅有一个 `Singleton` 实例。
+
+# JVM是如何执行方法调用的？
+
+## 重载与重写
+
+重载与重写：
+
+- 重载（Overload）指的是方法名相同而参数类型不相同的方法之间的关系
+
+- 重写（Override）指的是方法名相同并且参数类型也相同的方法之间的关系
+
+**重载的方法在编译过程中即可完成识别** ，具体到每一个方法调用，Java 编译器会根据所传入参数的声明类型（注意与实际类型区分）来选取重载方法
+
+选取重载方法的过程共分为三个阶段：
+
+1. 在不考虑对基本类型自动装拆箱（auto-boxing，auto-unboxing），以及可变长参数的情况下选取重载方法
+2. 如果在第 1 个阶段中没有找到适配的方法，那么在允许自动装拆箱，但不允许可变长参数的情况下选取重载方法
+3. 如果在第 2 个阶段中没有找到适配的方法，那么在允许自动装拆箱以及可变长参数的情况下选取重载方法
+
+如果 Java 编译器在同一个阶段中找到了多个适配的方法，那么就根据形式参数类型的继承关系来选取：
+
+```java
+public class Test {
+
+    public static void main(String[] args) {
+        Test test = new Test();
+
+        // null 既可以匹配 A 方法中声明为 Object 的形式参数，
+        // 也可以匹配 B 方法中声明为 String 的形式参数
+        // 由于 String 是 Object 的子类，因此 Java 编译器会认为 B 更贴切
+        test.invoke(null, 1); // 调用 B
+        test.invoke(null, 1, 2); // 调用 B
+
+        // 只有手动绕开可变长参数的语法，才会调用 A
+        test.invoke(null, new Object[]{1});
+    }
+
+
+    void invoke(Object obj, Object... args) {
+        System.out.println("这是 A");
+    }
+
+    void invoke(String s, Object obj, Object... args) {
+        System.out.println("这是 B");
+    }
+}
+```
+
+除了同一个类中的方法，重载也可以作用于这个类所继承而来的方法。也就是说，如果子类定义了与父类中非私有方法同名的方法，而且这两个方法的参数类型不同，那么在子类中，这两个方法同样构成了重载。
+
+---
+
+如果子类定义了与父类中非私有方法同名的方法，而且这两个方法的参数类型相同，那么这两个方法之间又是什么关系？
+
+```java
+class Test {
+
+    public void foo1() {
+        System.out.println("父类的非静态，非私有");
+    }
+
+    static void foo2() {
+        System.out.println("父类的静态方法");
+    }
+}
+
+// Test 的子类
+class TestChild extends Test{
+
+    // 子类的方法重写了父类中的方法
+    @Override
+    public void foo1() {
+        System.out.println("子类的非静态，非私有");
+    }
+
+    // 子类中的方法隐藏了父类中的方法
+    static void foo2() {
+        System.out.println("子类的静态方法");
+    }
+}
+```
+
+## 静态绑定（static binding）和动态绑定（dynamic binding）
+
+**JVM 识别方法的关键** ：
+
+- 方法描述符（method descriptor）：
+	- 方法的参数类型
+	- 方法的返回类型
+- 类名
+- 方法名
+
+在同一个类中，如果同时出现多个名字相同且描述符也相同的方法，那么 JVM 会在类的验证阶段就报错。
+
+JVM 与 Java 语言不同，它并不限制「名字与参数类型相同，但返回类型不同的方法」出现在同一个类中。
+
+也就是说，下面的代码在 Java 语言中不成立，但是在 JVM 中可以成立：
+
+```java
+// 名字都为 foo，参数类型都为 int，返回值不同
+// 在 JVM 是可以成立的
+class Test {
+    boolean foo(int a) {
+        System.out.println("返回值为 boolean");
+        return a == 0;
+    }
+
+    int foo(int b) {
+        System.out.println("返回值为 int");
+        return b;
+    }
+}
+```
+
+对于调用这些方法的字节码来说，由于字节码所附带的方法描述符包含了返回类型，因此 JVM 能够准确地识别目标方法。
+
+**JVM 中关于方法重写（Override）的判定同样基于方法描述符** 。如果子类定义了与父类中非私有、非静态方法同名的方法，那么只有当这两个方法的参数类型以及返回类型一致，JVM 才会判定为重写。
+
+> Java 的重写（Override）与 JVM  中的重写（Override）并不一致
+
+**对于 Java 语言中为 Override 而 Java 虚拟机中不是 Override 的情况，编译器会通过生成 Bridge Methods（[桥接方法](https://docs.oracle.com/javase/tutorial/java/generics/bridgeMethods.html)）来实现 Java中的重写语义**
+
+---
+
+**由于 Java 编译器在编译阶段已经区分了重载（Overload）的方法，所以可以认为 JVM 中不存在重载（Overload）这一概念** 。因此，在某些文章中重载也被称为静态绑定（static binding），或者编译时多态（compile-timepolymorphism，而重写则被称为动态绑定（dynamic binding）
+
+这个说法在 Java 虚拟机语境下并非完全正确，因为某个类中的重载方法可能被它的子类所重写，因此 **Java 编译器会将所有对非私有实例方法的调用，编译为需要动态绑定的类型**
+
+**Static Binding 和 Dynamic Binding** ：
+
+- Static Binding（静态绑定）：在解析时便能够直接识别目标方法的情况
+- Dynamic Binding（动态绑定）：需要在运行过程中根据调用者的动态类型来识别目标方法的情况
+
+---
+
+Java 字节码中与调用相关的指令共有五种：
+
+1. invokestatic：用于调用静态方法
+2. invokespecial：用于调用私有实例方法、构造器，以及使用 super 关键字调用父类的实例方法或构造器，和所实现接口的默认方法
+3. invokevirtual：用于调用非私有实例方法
+4. invokeinterface：用于调用接口方法
+5. invokedynamic：用于调用动态方法
+
+参考代码如下：
+
+```java
+import java.util.Random;
+
+interface Customer {
+    boolean isVip();
+}
+
+class Merchant {
+    public double finalPrice(double originalPrice, Customer customer) {
+        return originalPrice * 0.8d;
+    }
+}
+
+class BlackMerchant extends Merchant {
+
+    @Override
+    public double finalPrice(double originalPrice, Customer customer) {
+
+        if (customer.isVip()) { // invokeinterface
+            return originalPrice * expensiveRate(); // invokestatic
+        } else {
+            return super.finalPrice(originalPrice, customer); // invokespecial
+        }
+
+    }
+
+    // 熟客，使用更高的价格
+    public static double expensiveRate() {
+        return new Random() // invokespecial
+                .nextDouble() // invokevirtual
+                + 0.8d;
+    }
+}
+```
+
+**对于 `invokestatic` 以及 `invokespecial` 而言，JVM 能直接识别具体的目标方法** ，所以在 JVM  中，静态绑定包括：
+
+- 用于调用静态方法的 `invokestatic` 指令
+- 用于调用构造器、私有实例方法以及超类非私有实例方法的 `invokespecial` 指令
+
+而 **对于 `invokevirtual` 以及 `invokeinterface` 而言，在绝大部分情况下，虚拟机需要在执行过程中，根据调用者的动态类型，来确定具体的目标方法**
+
+**唯一的例外在于，如果虚拟机能够确定目标方法有且仅有一个，比如说目标方法被标记为 `final`，那么它可以不通过动态类型，直接确定目标方法**
+
+## 调用指令的符号引用
+
+在编译过程中，我们并不知道目标方法的具体内存地址。因此， **在 class 文件中，Java 编译器会暂时用符号引用来指代目标方法** ，这一符号引用包括：
+
+- 目标方法所在的类或接口的名字
+- 目标方法的方法名和方法描述符
+
+符号引用存储在 class 文件的常量池之中（可以使用 `javap -v $类名.class` 来查看 Constant pool）。根据目标方法是否为接口方法，这些引用可分为
+
+- 接口符号引用
+- 非接口符号引用
+
+**在执行调用指令前，JVM 会解析符号引用，并替换为实际引用**
+
+对于非接口符号引用，假定该符号引用所指向的类为 C，则 Java 虚拟机会按照如下步骤进行查找：
+
+1. 在 C 中查找符合名字及描述符的方法
+
+2. 如果没有找到，在 C 的父类中继续搜索，直至 Object 类
+
+3. 如果没有找到，在 C 所直接实现或间接实现的接口中搜索
+
+	- 这一步搜索得到的目标方法必须是非私有、非静态的
+
+	- 并且，如果目标方法在间接实现的接口中，则需满足 C 与该接口之间没有其他符合条件的目标方法
+
+	- 如果有多个符合条件的目标方法，则任意返回其中一个
+
+从这个解析算法可以看出，静态方法也可以通过子类来调用。此外，子类的静态方法会隐藏（注意与重写区分）父类中的同名、同描述符的静态方法。
+
+对于接口符号引用，假定该符号引用所指向的接口为 I，则 Java 虚拟机会按照如下步骤进行查找：
+
+1. 在 I 中查找符合名字及描述符的方法
+2. 如果没有找到，在 Object 类中的公有实例方法中搜索。
+3. 如果没有找到，则在 I 的超接口中搜索。这一步的搜索结果的要求与非接口符号引用步骤 3 的要求一致
+
+经过上述的解析步骤之后，符号引用会被解析成实际引用：
+
+- 对于可以静态绑定的方法调用而言，实际引用是一个指向目标方法的指针
+- 对于需要动态绑定的方法调用而言，实际引用则是一个方法表的索引（辅助动态绑定的信息）
+
+## Virtual Method 虚方法调用
+
+**虚方法（virtual method ）调用包括 `invokevirtual` 指令和 `invokeinterface` 指令** ：
+
+- 如果这两种虚方法调用指令所声明的目标方法，被标记为 `final`，那么 JVM 会采用 static binding（静态绑定）
+- 否则（绝大部分情况），JVM 将采用 dynamic binding（动态绑定），在运行过程中根据调用者的动态类型，来决定具体的目标方法
+
+> 静态绑定的「虚方法」，比静态绑定的「非虚方法」，更加耗时
+
+JVM 中采取了一种用空间换取时间的策略实现 dynamic binding（动态绑定）。它为每个类生成一张方法表，用以快速定位目标方法
+
+## Method Table 方法表
+
+> 类加载的准备阶段，它除了为静态字段分配内存之外，还会构造与该类相关联的方法表
+
+**JVM 中的 static binding（动态绑定），是通过 Method Table（方法表）这一数据结构来实现的** :
+
+- Method Table 中每一个重写方法的索引值，与父类方法表中被重写的方法的索引值一致
+- 在解析虚方法调用时，JVM 会记录下所声明的目标方法的索引值，并且在运行过程中根据这个索引值查找具体的目标方法。
+
+下面将以 `invokevirtual` 所使用的虚方法表（virtual method table，vtable）为例介绍方法表的用法。`invokeinterface` 所使用的接口方法表（interface method table，itable）稍微复杂些，但原理是类似的。
+
+**方法表本质上是一个数组，每个数组元素指向一个当前类及其祖先类中非私有的实例方法** ，这些方法可能是 *具体的、可执行的方法* ，也可能是 *没有相应字节码的抽象方法*
+
+方法表满足两个特质：
+
+1. 子类方法表中包含父类方法表中的所有方法
+2. 子类方法在方法表中的索引值，与它所重写的父类方法的索引值相同
+
+之前提到过：
+
+> 方法调用指令中的符号引用会在执行之前解析成实际引用：
+>
+> 1. 对于静态绑定的方法调用而言，实际引用将指向具体的目标方法
+>
+> 2. 对于动态绑定的方法调用而言，实际引用则是方法表的索引值（实际上并不仅是索引值）
+
+**动态绑定：在执行过程中，JVM 将获取调用者的实际类型，并在该实际类型的虚方法表（virtual method table，vtable）中，根据索引值获得目标方法**
+
+```java
+abstract class Passenger {
+
+    // 出境
+    abstract void leaveCountry();
+
+    @Override
+    public String toString() {
+        return super.toString();
+    }
+}
+
+class nonCitizen extends Passenger {
+
+    @Override
+    void leaveCountry() {
+        System.out.println("进入外国人通道");
+    }
+
+    void shopping() {
+        System.out.println("免税店购物");
+    }
+}
+
+class citizens extends Passenger {
+
+    @Override
+    void leaveCountry() {
+        System.out.println("进入本国人通道");
+    }
+}
+```
+
+上面的代码
+
+JVM 中的即时编译器会使用内联缓存来加速动态绑定：
+
+- JVM 所采用的单态内联缓存将纪录调用者的动态类型，以及它所对应的目标方法
+- 当碰到新的调用者时，如果其动态类型与缓存中的类型匹配，则直接调用缓存的目标方法
+- 否则，JVM 将该内联缓存劣化为超多态内联缓存，在今后的执行过程中直接使用方法表进行动态绑定。
+
