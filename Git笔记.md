@@ -763,6 +763,34 @@ git rebase --continue
 
 然后在 vim 中编辑合并后的 commit 信息，最后保存即可。
 
+## 修改 commit 的时间
+
+先使用 `date -R` 查看当前时间及格式，比如：`Sun, 01 Aug 2021 10:35:30 +0800`
+
+如果是修改上次 commit 的时间为 2018 年 12 月 25 日，可以使用：
+
+```bash
+git commit --amend --date="Sun, 25 Dec 2018 19:42:09 +0800"
+```
+
+将上次的 commit 修改为当前时间：
+
+```bash
+git commit --amend --date="$(date -R)" # 可以说这个
+git commit --amend --date=`date -R` # 也可以是这个
+```
+
+如果修改的不是上一次的 commit：
+
+```bash
+git commit --amend --date="$(新的时间)" -C $(需要修改的 commit 的标识)
+```
+
+参考资料：
+
+- [修改 git 提交的时间 - xkcoding 的代码成长日记](https://xkcoding.com/2019/01/21/modify-git-commit-timestamp.html)
+- [git 修改上次git commit的时间](https://blog.csdn.net/guoyajie1990/article/details/73824732)
+
 # 查看 Log 和仓库内的文件
 
 log 只显示一行：
