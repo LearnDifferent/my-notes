@@ -745,19 +745,80 @@ Java 7 引入了 Supressed 异常来解决“一个异常触发另一个异常�
 
 除了 `try-with-resources` 语法糖之外，Java 7 还支持在同一 `catch` 代码块中捕获多种异常：`catch (SomeException | OtherException e) {}` 。实际实现非常简单，生成多个异常表条目即可。
 
+# Java 对象的内存布局
+
+## Java 对象基础
+
+JVM 构造对象的方式
+
+- `new` 语句：通过调用构造器来初始化实例字段
+- 反射机制：通过调用构造器来初始化实例字段
+- `Object.clone` ：直接复制已有的数据，来初始化新建对象的实例字段
+- 反序列化：直接复制已有的数据，来初始化新建对象的实例字段
+- `Unsafe.allocateInstance` ：初始化实例字段
+
+---
+
+`new` 语句通过调用构造器来初始化实例字段，该语句编译而成的字节码包含：
+
+- 用来请求内存的 `new` 指令
+- 用来调用 constructor（构造器）的 `invokespecial` 指令
+
+如下代码：
+
+```java
+public class Foo {
+    public static void main(String[] args) {
+        Foo foo = new Foo();
+    }
+}
+```
+
+先执行 `javac Foo.java` 编译，然后 `javap -c Foo` 对代码进行反汇编，得到：
+
+```
+Compiled from "Foo.java"
+public class Foo {
+  public Foo();
+    Code:
+       0: aload_0
+       1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public static void main(java.lang.String[]);
+    Code:
+       0: new           #2                  // class Foo
+       3: dup
+       4: invokespecial #3                  // Method "<init>":()V
+       7: astore_1
+       8: return
+}
+```
+
+其中 `0: new` 就是请求内存空间，`4: invokespecial` 就是调用 constructor。
+
+从反编译的字节码中也可以看出，如果一个类没有定义任何 constructor 的话， Java 编译器会自动添加一个无参数的 constructor，如上面字节码中的  `public Foo();`
+
+然后，子类的 constructor 需要调用父类的 constructor：
+
+- 如果父类存在无参数构造器的话，该调用可以是隐式的：
+	- 隐式：Java 编译器会自动添加对父类构造器的调用
+- 如果父类没有无参数构造器，那么子类的构造器则需要显式地调用父类带参数的构造器。显式调用又可分为两种：
+	- 直接使用 `super` 关键字调用父类构造器
+	- 使用 `this` 关键字调用同一个类中的其他构造器
+- 只要调用了父类构造器，无论是直接的显式调用，还是间接的显式调用，都会成为构造器的第一条语句：
+	- 目的：以便优先初始化继承而来的父类字段
+	- 提醒：不过这可以通过调用其他生成参数的方法，或者字节码注入来绕开
+
+总而言之，当我们调用任意一个 constructor 时，它都直接或者间接调用父类的 constructor，直至 `Object` 类。
+
+这些 constructor 的调用者皆为同一对象，也就是通过 `new` 指令新建而来的对象，该对象的内存涵盖了所有父类中的实例字段（会初始化相应的父类字段）。
+
+也就是说，虽然子类无法访问父类的私有实例字段，或者子类的实例字段隐藏了父类的同名实例字段，但是子类的实例还是会为这些父类实例字段分配内存。
 
 
 
+待补充：
 
-
-
-
-
-
-
-
-
-
-
-
-
+- [ ] JVM 是怎么实现 invokedynamic 的？
+- [ ] JVM 是如何实现反射的
