@@ -747,6 +747,12 @@ Java 7 引入了 Supressed 异常来解决“一个异常触发另一个异常�
 
 # Java 对象的内存布局
 
+参考资料：
+
+- [Memory Layout of Objects in Java](https://www.baeldung.com/java-memory-layout)
+- [HotSpot Glossary of Terms](https://openjdk.java.net/groups/hotspot/docs/HotSpotGlossary.html)
+- 
+
 ## Java 对象基础
 
 JVM 构造对象的方式
@@ -812,9 +818,114 @@ public class Foo {
 
 总而言之，当我们调用任意一个 constructor 时，它都直接或者间接调用父类的 constructor，直至 `Object` 类。
 
-这些 constructor 的调用者皆为同一对象，也就是通过 `new` 指令新建而来的对象，该对象的内存涵盖了所有父类中的实例字段（会初始化相应的父类字段）。
+这些 constructor 的调用者皆为同一对象，也就是通过 `new` 指令新建而来的对象，该对象的内存涵盖了所有父类中的实例字段（新建的实例会初始化相应的父类字段）。
 
 也就是说，虽然子类无法访问父类的私有实例字段，或者子类的实例字段隐藏了父类的同名实例字段，但是子类的实例还是会为这些父类实例字段分配内存。
+
+## 对象的内存布局：字段在内存中的具体分布
+
+Ordinary Object Pointers (OOPs)：
+
+- JVM uses a data structure called Ordinary Object Pointers ([OOPs](https://github.com/openjdk/jdk15/tree/master/src/hotspot/share/oops)) to represent pointers to objects. Specifically, pointers into the GC-managed heap
+- Implemented as a native machine address, not a handle
+- OOPs may be directly manipulated by compiled or interpreted Java code, because the GC knows about the liveness and location of oops within such code. (See GC map.)
+- OOPs can also be directly manipulated by short spans of C/C++ code, but must be kept by such code within handles across every safepoint.
+
+Object Header（对象头）：
+
+- 每个 Java 对象都有一个 Object Header，同时 every OOP (Ordinary Object Pointer) points to an Object Header
+- Object Header is a common structure at the beginning of every GC-managed heap object
+- Object Header includes fundamental information about the heap object's layout, type, GC state, synchronization state, and identity hash code
+- In arrays it is immediately followed by a length field
+
+> Note that both Java Objects and VM-internal Objects have a common Object Header format
+
+Object Header consists of two words （对象头由两部分组成）：
+
+- Mark Word（标记字段）：
+	- The first word of every object header
+	- 用以存储 JVM 有关该对象的运行数据（如哈希码、GC 信息以及锁信息等）
+	- Usually a set of bitfields including synchronization state and identity hash code. May also be a pointer (with characteristic low bit encoding) to synchronization related information. During GC, may contain GC state bits.
+- Klass Pointer（类型指针）：
+	- The second word of every Object Header
+	- Points to another object (a metaobject) which describes the layout and behavior of the original object
+	- 也就是指向该对象的类
+	- For Java objects, the "klass" contains a C++ style "vtable"
+
+## 压缩指针 CompressedOops
+
+在 64 位的 Java 虚拟机中，Object Header（对象头）的Mark Word（标记字段）占 64 位，而 Klass Pointer（类型指针）又占了 64 位。
+
+也就是说，每一个 Java 对象在内存中的额外开销就是 16 个字节。以 Integer 类为例，它仅有一个 int 类型的私有字段，占 4 个字节。因此，每一个 Integer 对象的额外内存开销至少是 400%。这也是为什么 Java 要引入基本类型的原因之一。
+
+为了尽量较少对象的内存使用量，64 位 Java 虚拟机引入了 [CompressedOops](https://wiki.openjdk.java.net/display/HotSpot/CompressedOops)（压缩指针）的概念：
+
+- 对应虚拟机选项 `-XX:+UseCompressedOops` ，默认是开启的
+- 功能：将 GC-managed Heap（堆）中原本 64 位的 Java 对象指针（OOPs）压缩成 32 位
+- 附带效果 1：对象头中的 Klass Pointer（类型指针）也会被压缩成 32 位，使得 Object Header 的大小从 16 字节降至 12 字节
+- 附带效果 2：还可以作用于引用类型的字段，包括引用类型数组
+
+---
+
+CompressedOops 的原理：
+
+打个比方，路上停着的全是房车，而且每辆房车恰好占据两个停车位。现在，我们按照顺序给它们编号。也就是说，停在 0 号和 1 号停车位上的叫 0 号车，停在 2 号和 3 号停车位上的叫 1 号车，依次类推。
+
+原本的内存寻址用的是车位号：比如说我有一个值为 6 的指针，代表第 6 个车位（1 辆房车会占据 2 个车位），那么沿着这个指针可以找到 3 号房车。
+
+现在我们规定指针里存的值是「房车号」，比如 「房车号 3」指代 3 号房车。当需要查找 3 号房车时，我便可以将该指针的值（即「房车号」）乘以 2 等于 6（表示根据 3 号“房车号”，找到 6 号“停车位”），再沿着 6 号“停车位”找到 3 号房车。
+
+也就是说，因为 1 辆房车会占据 2 个车位，所以干脆将“1 辆房车占据的车位”，当做 1 个「房车号」。即，「2 个停车位」等于「1 个房车号」。
+
+所以，32 位 CompressedOops（压缩指针）最多可以标记 2 的 32 次方辆车，对应着 2 的 33 次方个车位。
+
+当然，房车也有大小之分。大房车占据的车位可能是三个甚至是更多。不过这并不会影响我们的寻址算法：我们只需跳过部分车号，便可以保持 `原本车号 * 2` 的寻址系统
+
+上述模型有一个前提——每辆车都从偶数号车位停起，这个概念就是内存对齐
+
+## Alignment & Padding
+
+By default, the JVM adds enough padding to the object to make its size a multiple of 8
+
+内存对齐：
+
+- 虚拟机选项 `-XX:ObjectAlignmentInBytes` ，默认值为 8
+- JVM 堆中对象的起始地址需要对齐至 8 的倍数
+	- 如果想修改为至少 16 的倍数，可以使用： `-XX:ObjectAlignmentInBytes=16`
+
+如果一个对象用不到 8N 个 Bytes（字节），那么空白的那部分空间就浪费掉了，浪费掉的空间就是对象间的 padding（填充）
+
+> 默认情况下，JVM 中的 32 位 CompressedOops（压缩指针）可以寻址到 2 的 35 次方个字节，也就是 32GB 的地址空间（超过 32GB 则会关闭压缩指针）。
+>
+> 在对 CompressedOops 解引用时，我们需要将其左移 3 位，再加上一个固定 offset（偏移量可以为 0），便可以得到能够寻址32GB 地址空间的伪 64 位指针了。
+>
+> 此外，我们可以通过配置刚刚提到的内存对齐选项（`-XX:ObjectAlignmentInBytes`）来进一步提升寻址范围。但是，这同时也可能增加对象间填充，导致压缩指针没有达到原本节省空间的效果。
+>
+> 举例来说，如果规定每辆车都需要从偶数车位号停起，那么对于占据两个车位的小房车来说刚刚好，而对于需要三个车位的大房车来说，也仅是浪费一个车位。
+>
+> 但是如果规定需要从 4 的倍数号车位停起，那么小房车则会浪费两个车位，而大房车至多可能浪费三个车位。
+
+**即使关闭了压缩指针，JVM 还是会进行内存对齐**。
+
+此外， **内存对齐不仅存在于对象与对象之间（Object Alignment），也存在于对象中的字段之间（Field Alignments）**
+
+比如说，Java 虚拟机要求 long 字段、double 字段，以及非压缩指针状态下的引用字段地址为 8 的倍数。
+
+字段内存对齐的其中一个原因，是让字段只出现在同一 CPU 的缓存行中。如果字段不是对齐的，那么就有可能出现跨缓存行的字段。
+
+也就是说，该字段的读取可能需要替换两个缓存行，而该字段的存储也会同时污染两个缓存行。这两种情况对程序的执行效率而言都是不利的。
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
