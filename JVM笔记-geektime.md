@@ -936,17 +936,24 @@ JVM 中有三种排列方法（对应 JVM 选项 `-XX:FieldsAllocationStyle` ，
 	- 对于使用了压缩指针的 64 位虚拟机，子类第一个字段需要对齐至 4N
 	- 对于关闭了压缩指针的 64 位虚拟机，子类第一个字段则需要对齐至 8N
 
----
+## 虚共享 False Sharing 和 @Contended 注解
 
-Java 8 还引入了一个新的注解 `@Contended` ，用来解决对象字段之间的 false sharing（虚共享）问题。这个注解也会影响到字段的排列。
+The `@Contended` annotation is a hint for the JVM to isolate the annotated fields to avoid [false sharing](https://alidg.me/blog/2020/4/24/thread-local-random#false-sharing) ：
+
+- `jdk.internal.vm.annotation.Contended` or `sun.misc.Contended` on Java 8
+- `@Contended` 用于解决对象字段之间的虚共享问题
+- `@Contended` 也会影响到字段的排列
 
 False Sharing（虚共享）：
 
-- 假设两个线程分别访问同一对象中不同的 volatile 字段，逻辑上它们并没有共享内容，因此不需要同步
+- 假设两个线程分别访问同一对象中不同的 `volatile` 字段，逻辑上它们并没有共享内容，因此不需要同步
 - 然而，如果这两个字段恰好在同一个缓存行中，那么对这些字段的写操作会导致缓存行的写回，也就造成了实质上的共享
-- JVM 会让不同的 `@Contended` 字段处于独立的缓存行中，因此会有大量的空间被浪费掉
 
+The `@Contended` annotation adds some paddings around each annotated field to isolate each field on its own cache line. 
 
+Consequently, this will impact the memory layout.
+
+> JVM 会让不同的 `@Contended` 字段处于独立的缓存行中，因此会有大量的空间被浪费掉
 
 
 
