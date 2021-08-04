@@ -751,7 +751,10 @@ Java 7 引入了 Supressed 异常来解决“一个异常触发另一个异常�
 
 - [Memory Layout of Objects in Java](https://www.baeldung.com/java-memory-layout)
 - [HotSpot Glossary of Terms](https://openjdk.java.net/groups/hotspot/docs/HotSpotGlossary.html)
-- 
+- [JAVA对象布局之对象头(Object Header)](https://segmentfault.com/a/1190000037643624)
+- [Java Objects Inside Out](https://shipilev.net/jvm/objects-inside-out/#_field_packing)
+- [JVM之压缩指针（CompressedOops）](https://juejin.cn/post/6844903768077647880)
+- [码农会锁，synchronized 对象头结构(mark-word、Klass Pointer)、指针压缩、锁竞争，源码解毒、深度分析！](https://www.cnblogs.com/xiaofuge/p/13895226.html)
 
 ## Java 对象基础
 
@@ -915,9 +918,12 @@ By default, the JVM adds enough padding to the object to make its size a multipl
 
 也就是说，该字段的读取可能需要替换两个缓存行，而该字段的存储也会同时污染两个缓存行。这两种情况对程序的执行效率而言都是不利的。
 
-## 字段重排列：使字段内存对齐
+## Field Packing 字段重排列：使字段内存对齐
 
-字段重排列：JVM 重新分配字段的先后顺序，以达到内存对齐的目的
+字段重排列：
+
+- JVM 重新分配字段的先后顺序，以达到内存对齐的目的
+- When a class has multiple fields, the JVM may distribute those fields in such a way as to minimize padding waste
 
 JVM 中有三种排列方法（对应 JVM 选项 `-XX:FieldsAllocationStyle` ，默认值为 1），但都会遵循如下两个规则：
 
