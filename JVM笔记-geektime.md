@@ -33,7 +33,12 @@ JVM 中的 Stack 可以细分为：
     - 将一个方法中包含的所有字节码编译成机器码后再执行
     - 实际运行速度更快
 
+> **interpreter** : A VM module which implements method calls by individually executing bytecodes. The interpreter has a limited set of highly stylized stack frame layouts and register usage patterns, which it uses for all method activations. The Hotspot VM generates its own interpreter at start-up time.
+
+> **JIT compilers** : An on-line compiler which generates code for an application (or class library) during execution of the application itself. ("JIT" stands for "just in time".) A JIT compiler may create machine code shortly before the first invocation of a Java method. Hotspot compilers usually allow the interpreter ample time to "warm up" Java methods, by executing them thousands of times. This warm-up period allows a compiler to make better optimization decisions, because it can observe (after initial class loading) a more complete class hierarchy. The compiler can also inspect branch and type profile information gathered by the interpreter.
+
 HotSpot 在翻译时默认采用混合模式，它会先解释执行字节码，而后将其中反复执行的热点代码，以方法为单位进行即时编译：
+
 - 我们假设程序符合二八定律，20% 的代码占据了 80% 的计算资源
 - 对于不常用的代码，就不用花费时间编译成机器码，直接采用解释执行即可
 - 对于小部分热点代码，将其编译成机器码就可以提高运行时的速度
@@ -963,6 +968,7 @@ Consequently, this will impact the memory layout.
 
 - Sweep（清除）:
 	- 把死亡对象所占据的内存标记为空闲内存，并记录在一个 Free List（空闲列表）之中
+		- Free List：A storage management technique in which unused parts of the Java object heap are chained one to the next, rather than having all of the unused part of the heap in a single block
 	- 当需要新建 Object 时，内存管理模块便会从该空闲列表中寻找空闲内存，并划分给新建的 Object
 	- 缺点 1：造成内存碎片——Heap 中的对象必须是连续分布的，因此可能出现总空闲内存足够，但是无法分配的极端情况
 	- 缺点 2：分配效率较低——如果是一块连续的内存空间，就可以通过 pointer bumping（指针加法）来做分配。而对于空闲列表，JVM 需要逐个访问列表中的项，来查找能够放入新建 Object 的空闲内存
@@ -974,26 +980,30 @@ Consequently, this will impact the memory layout.
 	- 当发生垃圾回收时，便把存活的 Object 复制到 to 指针指向的内存区域中，并且交换 from 指针和 to 指针的内容
 	- Copy 这种回收方式同样能够解决内存碎片化的问题，但是它的缺点也极其明显——堆空间的使用效率极其低下
 
-## JVM 中 Heap 的划分
+## JVM 中 Heap 的划分：Old Generation & Young Generation
 
 因为大部分的 Java 对象只存活一小段时间，而存活下来的小部分 Java 对象则会存活很长一段时间，所以 JVM  采用「分代回收」
 
 堆空间分为两代：
 
-- 新生代：
+- 新生代（Young Generation）：
+	- A region of the Java object heap that holds recently-allocated objects.
 	- 用来存储新建的对象
-	- 因为大部分的 Java 对象只存活一小段时间，所以可以频繁地采用耗时较短的垃圾回收算法，让大部分的垃圾都能够在新生代被回收掉
-- 老年代：
-	- 当对象存活时间够长时，就会被移动到老年代
-	- 因为大部分的垃圾已经在新生代中被回收了，而在老年代中的对象有大概率会继续存活
-	- 当真正触发针对老年代的回收时，则代表这个假设出错了，或者堆的空间已经耗尽了
+	- 因为大部分的 Java 对象只存活一小段时间，所以可以频繁地采用耗时较短的垃圾回收算法，让大部分的垃圾都能够在新生代（Young Generation）被回收掉
+- 老年代（Old Generation）：
+	- A region of the Java object heap that holds object that have remained referenced for a while
+	- 当对象存活时间够长时，就会被移动到老年代（Old Generation）
+	- 因为大部分的垃圾已经在新生代（Young Generation）中被回收了，而在老年代（Old Generation）中的对象有大概率会继续存活
+	- 当真正触发针对老年代（Old Generation）的回收时，则代表这个假设出错了，或者堆的空间已经耗尽了
 	- 这时，JVM 往往需要做一次全堆扫描，耗时也将不计成本（现代的垃圾回收器都在并发收集的道路上发展，来避免这种全堆扫描的情况。）
 
-新生代：
+新生代（Young Generation）：
 
-- Eden 区
+- Eden 区：A part of the Java object heap where object can be created efficiently
 - Survivor 区 from（大小和 to 相同）
 - Survivor 区 to（大小和 from 相同，但是 to 是空的）
+
+> **survivor space** : A region of the Java object heap used to hold objects. There are usually a pair of survivor spaces, and collection of one is achieved by copying the referenced objects in one survivor space to the other survivor space
 
 默认情况下，JVM 采取的是一种动态分配的策略（参数 `-XX:+UsePSAdaptiveSurvivorSizePolicy` ），根据生成对象的速率，以及 Survivor 区的使用情况动态调整 Eden 区和 Survivor 区的比例：
 
@@ -1011,6 +1021,8 @@ JVM 的解决方法是为每个司机预先申请多个停车位，并且只允�
 如果一个司机的停车位用完了，可以再申请多个停车位。
 
 这项技术被称之为 `TLAB` （Thread Local Allocation Buffer，虚拟机参数 `-XX:+UseTLAB` ，默认开启）。
+
+> **TLAB** : Thread-local allocation buffer. Used to allocate heap space quickly without synchronization. Compiled code has a "fast path" of a few instructions which tries to bump a high-water mark in the current thread's TLAB, successfully allocating an object if the bumped mark falls before a TLAB-specific limit address.
 
 具体来说，每个线程可以向 JVM 申请一段连续的内存，比如 2048 字节，作为线程私有的TLAB。这个操作需要加锁，线程需要维护两个指针：
 
@@ -1030,55 +1042,59 @@ JVM 的解决方法是为每个司机预先申请多个停车位，并且只允�
 
 ## Minor GC
 
-**当 Eden 区的空间耗尽了，就会触发一次 Minor GC，用于收集新生代的垃圾。存活下来的对象，则会被送到 Survivor 区。**
+**当 Eden 区的空间耗尽了，就会触发一次 Minor GC，用于收集新生代（Young Generation）的垃圾。存活下来的对象，则会被送到 Survivor 区。**
 
-新生代共有两个 Survivor 区，我们分别用 from 和 to 来指代。其中 to 指向的 Survivior 区是空的。
+新生代（Young Generation）共有两个 Survivor 区，我们分别用 from 和 to 来指代。其中 to 指向的 Survivior 区是空的。
 
 当发生 Minor GC 时， <u>Eden 区</u> 和 <u>from 指向的 Survivor 区</u> 中存活的对象，会被复制到 <u>to 指向的Survivor 区</u> 中，然后 **交换 from 和 to 指针** ，以保证下一次 Minor GC 时，to 指向的 Survivor 区还是空的。
 
 JVM 会记录 <u>Survivor 区</u> 中的对象一共被来回复制了几次：
 
-- 如果一个对象被复制次数超过一定数值时（默认次数为 15，参数 `-XX:+MaxTenuringThreshold` ），那么该对象将被晋升（promote）至老年代
-- 如果 <u>单个Survivor 区</u> 已经被占用了 50%（参数 `-XX:TargetSurvivorRatio` ），那么较高复制次数的对象也会被晋升至老年代
+- 如果一个对象被复制次数超过一定数值时（默认次数为 15，参数 `-XX:+MaxTenuringThreshold` ），那么该对象将被晋升（promote）至老年代（Old Generation）
+- 如果 <u>单个Survivor 区</u> 已经被占用了 50%（参数 `-XX:TargetSurvivorRatio` ），那么较高复制次数的对象也会被晋升至老年代（Old Generation）
 
-也就是说， **当发生 Minor GC 时，会使用「标记 - 复制算法」，将 Survivor 区中老的存活对象晋升到老年代，然后将剩下的存活对象和 Eden 区的存活对象复制到另一个 Survivor 区中**
+也就是说， **当发生 Minor GC 时，会使用「标记 - 复制算法」，将 Survivor 区中老的存活对象晋升到老年代（Old Generation），然后将剩下的存活对象和 Eden 区的存活对象复制到另一个 Survivor 区中**
 
 理想情况下，Eden 区中的对象基本都死亡了，那么需要复制的数据将非常少，因此采用这种「标记 - 复制算法」的效果极好。
 
-Minor GC 的另外一个好处是不用对整个堆进行垃圾回收。但是，它却有一个问题，那就是老年代的对象可能引用新生代的对象。
+Minor GC 的另外一个好处是不用对整个堆进行垃圾回收。但是，它却有一个问题，那就是老年代（Old Generation）的对象可能引用新生代（Young Generation）的对象。
 
-也就是说，在标记存活对象的时候，我们需要扫描老年代中的对象。如果该对象拥有对新生代对象的引用，那么这个引用也会被作为 GC Roots。
+也就是说，在标记存活对象的时候，我们需要扫描老年代（Old Generation）中的对象。如果该对象拥有对新生代（Young Generation）对象的引用，那么这个引用也会被作为 GC Roots。
 
 这样一来，好像又做了一次全堆扫描？解决方案就是 Card Table
 
 ## Card Table
 
-因为 Minor GC 只针对新生代进行垃圾回收，所以在枚举 GC Roots 的时候，“如果老年代中的对象，拥有新生代中的对象的引用”，就可能需要扫描整个老年代。
+因为 Minor GC 只针对新生代（Young Generation）进行垃圾回收，所以在枚举 GC Roots 的时候，“如果老年代（Old Generation）中的对象，拥有新生代（Young Generation）中的对象的引用”，就可能需要扫描整个老年代（Old Generation）。
 
-**为了避免扫描整个老年代，HotSpot 引入了名为 Card Table 的技术，可以大致地标出可能存在“老年代到新生代引用”的内存区域**
+**为了避免扫描整个老年代（Old Generation），HotSpot 引入了名为 Card Table 的技术，可以大致地标出可能存在“老年代（Old Generation）到新生代（Young Generation）引用”的内存区域**
 
 Card Table（卡表）：
 
+- A kind of remembered set that records where oops have changed in a generation
+	- Remembered Set：A data structure that records pointers between generations
 - 整个 Heap 会被划分为一个个大小为 512 字节的 Card（卡），Card Table 会储存每张 Card 的标识
-- 每张 Card 的标识位，表示“对应的 Card 是否可能存有指向新生代对象的引用”，如果可能存在，那么我们就认为这张卡是 dirty（脏的）
+- 每张 Card 的标识位，表示“对应的 Card 是否可能存有指向新生代（Young Generation）对象的引用”，如果可能存在，那么我们就认为这张卡是 dirty（脏的）
 
-在 Minor GC 的时候，就不需要扫描整个老年代，而是 **在 Card Table 中找到 Dirty Card(s)，并将 Dirty Card 中的 Object（对象）加入到 Minor GC 的 GC Roots 中**
+在 Minor GC 的时候，就不需要扫描整个老年代（Old Generation），而是 **在 Card Table 中找到 Dirty Card(s)，并将 Dirty Card 中的 Object（对象）加入到 Minor GC 的 GC Roots 中**
 
 **After all Dirty Cards are scanned, the JVM will clear the identification bits of all Dirty Cards** （扫描完所有脏卡后，就将所有脏卡的标识位清零）
 
 ---
 
-因为 Minor GC 需要对「存活的对象」进行「复制」操作。而「复制」操作需要更新「指向该对象的引用」。因此，在更新「引用」的同时，我们又会设置「引用所在的卡的标识位」。这个时候，我们可以确保 Dirty Card（脏卡）中必定包含「指向新生代对象的引用」。
+因为 Minor GC 需要对「存活的对象」进行「复制」操作。而「复制」操作需要更新「指向该对象的引用」。因此，在更新「引用」的同时，我们又会设置「引用所在的卡的标识位」。这个时候，我们可以确保 Dirty Card（脏卡）中必定包含「指向新生代（Young Generation）对象的引用」。
 
-在 Minor GC 之前，我们并不能确保 Dirty Card 中是否包含「指向新生代对象的引用」。其原因和「如何设置卡的标识位」有关：
+在 Minor GC 之前，我们并不能确保 Dirty Card 中是否包含「指向新生代（Young Generation）对象的引用」。其原因和「如何设置卡的标识位」有关：
 
-首先，要想要保证每个可能有「指向新生代对象引用」的卡都被标记为 Dirty Card，那么 JVM 就需要截获每个引用型实例变量的写操作，并作出对应的写标识位操作
+首先，要想要保证每个可能有「指向新生代（Young Generation）对象引用」的卡都被标记为 Dirty Card，那么 JVM 就需要截获每个引用型实例变量的写操作，并作出对应的写标识位操作
 
 这个操作在解释执行器中比较容易实现。但是在即时编译器生成的机器码中，则需要插入额外的逻辑。这也就是所谓的写屏障（write barrier，注意不要和 volatile 字段的写屏障混淆）
 
+> **write barrier** : Code that is executed on every oop store. For example, to maintain a remembered set.
+
 写屏障需要尽可能地保持简洁。这是因为我们并不希望在每条引用型实例变量的写指令后跟着一大串注入的指令。
 
-因此，写屏障并不会判断更新后的引用是否指向新生代中的对象，而是宁可错杀，不可放过，一律当成可能指向新生代对象的引用。
+因此，写屏障并不会判断更新后的引用是否指向新生代（Young Generation）中的对象，而是宁可错杀，不可放过，一律当成可能指向新生代（Young Generation）对象的引用。
 
 这么一来，写屏障便可精简为下面的伪代码 [1]。这里右移 9 位相当于除以 512，JVM 便是通过这种方式来从地址映射到卡表中的索引的。最终，这段代码会被编译成一条移位指令和一条存储指令。
 
@@ -1140,6 +1156,12 @@ GC Roots 包括（但不限于）如下几种：
 - JNI handles
 - 已启动且未停止的 Java 线程
 
+> **GC Root (Garbage Collection Root)** : A pointer into the Java object heap from outside the heap. These come up, e.g., from static fields of classes, local references in activation frames, etc.
+
+> **JNI** : The Java Native Interface - a specification and API for how Java code can call out to native C code, and how native C code can call into the Java VM
+
+> **handle** : A memory word containing an oop. The word is known to the GC, as a root reference. C/C++ code generally refers to oops indirectly via handles, to enable the GC to find and manage its root set more easily. Whenever C/C++ code blocks in a safepoint, the GC may change any oop stored in a handle. Handles are either 'local' (thread-specific, subject to a stack discipline though not necessarily on the thread stack) or global (long-lived and explicitly deallocated). There are a number of handle implementations throughout the VM, and the GC knows about them all.
+
 **可达性分析可以解决引用计数法所不能解决的循环引用问题** 。举例来说，即便对象 a 和 b 相互引用，只要从 GC Roots 出发无法到达 a 或者 b，那么可达性分析便不会将它们加入存活对象合集之中。
 
 ## Stop-the-world 以及安全点
@@ -1157,6 +1179,8 @@ GC Roots 包括（但不限于）如下几种：
 这也就造成了垃圾回收所谓的暂停时间（GC pause）
 
 JVM  中的 Stop-the-world 是通过 safepoint（安全点）机制来实现的。当 Java 虚拟机收到 Stop-the-world 请求，它便会等待所有的线程都到达安全点，才允许请求 Stop-the-world 的线程进行独占的工作。
+
+> **Safepoint** : A point during program execution at which all GC roots are known and all heap object contents are consistent. From a global point of view, all threads must block at a safepoint before the GC can run. (As a special case, threads running JNI code can continue to run, because they use only handles. During a safepoint they must block instead of loading the contents of the handle.) From a local point of view, a safepoint is a distinguished point in a block of code where the executing thread may block for the GC. Most call sites qualify as safepoints. There are strong invariants which hold true at every safepoint, which may be disregarded at non-safepoints. Both compiled Java code and C/C++ code be optimized between safepoints, but less so across safepoints. The JIT compiler emits a GC map at each safepoint. C/C++ code in the VM uses stylized macro-based conventions (e.g., TRAPS) to mark potential safepoints.
 
 Safepoint 的初始目的并不是让其他线程停下，而是找到一个稳定的执行状态。在这个执行状态下，JVM 的堆栈不会发生变化。这么一来，垃圾回收器便能够“安全”地执行可达性分析。
 
