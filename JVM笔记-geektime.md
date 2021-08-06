@@ -1211,7 +1211,53 @@ Safepoint 的初始目的并不是让其他线程停下，而是找到一个稳�
 
 除了垃圾回收之外，Java 虚拟机其他一些对堆栈内容的一致性有要求的操作也会用到安全点这一机制。
 
+# Java Memory Model
 
+JMM（Java Memory Model / Java 内存模型）：
+
+- JMM describes how threads in the Java programming language interact through memory.
+- Together with the description of single-threaded execution of code, the memory model provides the semantics of the Java programming language.
+
+JMM specifies how and when different threads can see values written to shared variables by other threads, and how to synchronize access to shared variables when necessary.
+
+## 指令重排：Java 内存访问重排序
+
+Java 代码在运行的时候并不是严格按照代码语句顺序执行的， **编译器可能会对指令进行 Reordering（重排序）** 
+
+> 大多数现代微处理器都会采用将指令乱序执行（out-of-order execution，简称 OoOE 或OOE）的方法，在条件允许的情况下，直接运行当前有能力立即执行的后续指令，避开获取下一条指令所需数据时造成的等待。
+>
+> 通过乱序执行的技术，处理器可以大大提高执行效率。
+>
+> 除了处理器，常见的 Java 运行时环境的 JIT 编译器也会做指令重排序操作，即生成的机器指令与字节码指令顺序不一致。
+
+**所有的 Action（动作）都可以为了优化而被重排序，但是即时编译器、运行时和处理器都需要保证程序能够遵守 as-if-serial 属性。**
+
+As-if-serial 语义：
+
+- 在单线程情况下，要给程序一个顺序执行的假象
+	- 也就是说，经过重排序的执行结果要与顺序执行的结果保持一致
+- 如果两个操作之间存在数据依赖，那么即时编译器（和处理器）不能调整它们的顺序
+- 否则，将会造成程序语义的改变
+
+在下面的代码中，`y = 0 / 0` 可能会被重排序在 `x = 2` 之前执行，为了保证最终不致于输出 `x = 1` 的错误结果，JIT 在重排序时会在 `catch` 语句中插入错误代偿代码，将 `x` 赋值为2，将程序恢复到发生异常时应有的状态：
+
+```java
+public class Reordering {
+    public static void main(String[] args) {
+        int x, y;
+        x = 1;
+        try {
+            x = 2;
+            y = 0 / 0;
+        } catch (Exception e) {
+        } finally {
+            System.out.println("x = " + x);
+        }
+    }
+}
+```
+
+这种做法的确将异常捕捉的逻辑变得复杂了，但是 JIT 的优化的原则是，尽力优化正常运行下的代码逻辑，哪怕以 `catch` 块逻辑变得复杂为代价…… 毕竟，进入 `catch` 块内是一种“异常”情况的表现。
 
 
 
