@@ -1259,6 +1259,66 @@ public class Reordering {
 
 这种做法的确将异常捕捉的逻辑变得复杂了，但是 JIT 的优化的原则是，尽力优化正常运行下的代码逻辑，哪怕以 `catch` 块逻辑变得复杂为代价…… 毕竟，进入 `catch` 块内是一种“异常”情况的表现。
 
+## JMM 与 happens-before
+
+在单线程环境下，因为 *as-if-serial* 的保证，「指令重排」的结果是符合预期的。然而， **在多线程的情况下，可能会出现 Data Race（数据竞争）的情况** ，也就是多个线程读取内存中的数据导致数据不同步的问题。
+
+不同硬件环境下「指令重排序」的规则是不同的。为此，JSR-1337 制定了 JMM（Java Memory Model / Java 内存模型），以 **提供一个统一的可参考的指令重排序（Reordering）规范，屏蔽平台差异性** 。从 Java 5 开始，JMM 成为 Java 语言规范的一部分。
+
+**JMM 也可以让应用程序能够免于 Data Race（数据竞争）的干扰。** 
+
+JMM 中最为重要的一个概念便是 **happens-before 关系** ：
+
+- happens-before 关系用于描述两个操作的内存可见性
+- happens-before 的前后两个操作不会被重排序，且后者对前者的内存可见
+
+[Two actions can be ordered by a *happens-before* relationship](https://docs.oracle.com/javase/specs/jls/se7/html/jls-17.html#jls-17.4.5)：
+
+- If one action *happens-before* another, then the first is visible to and ordered before the second
+- 如果操作 X happens-before 操作 Y，那么 X 的结果对于 Y 可见
+
+在同一个线程中，字节码的 program order（先后顺序）也暗含了 happens-before 关系：
+
+- 在程序控制流路径中，靠前的字节码 happens-before 靠后的字节码
+- 不过，这并不意味着前者一定在后者之前执行。实际上，如果后者没有观测前者的运行结果，即后者没有数据依赖于前者，那么它们可能会被重排序。
+
+所有 happens-before 的规则如下：
+
+- 程序次序法则：线程中的每个动作 A 都 happens-before 于该线程中的每一个动作 B，其中，在程序中，所有的动作 B 都能出现在 A之 后。
+- 监视器锁法则：对一个监视器锁的解锁 happens-before 于每一个后续对同一监视器锁的加锁。
+- volatile 变量法则：对 volatile 域的写入操作 happens-before 于每一个后续对同一个域的读写操作。
+- 线程启动法则：在一个线程里，对 `Thread.start` 的调用会 happens-before 于每个启动线程的动作。
+- 线程终结法则：线程中的任何动作都 happens-before 于其他线程检测到这个线程已经终结、或者从 `Thread.join` 调用中成功返回，或 `Thread.isAlive` 返回 `false` 。
+- 中断法则：一个线程调用另一个线程的 `interrupt` happens-before 于被中断的线程发现中断。
+- 终结法则：一个对象的构造函数的结束 happens-before 于这个对象 `finalizer` 的开始。
+- 传递性：如果 A happens-before 于 B，且 B happens-before 于 C，则 A happens-before 于 C
+
+---
+
+在多线程中，解决 Data Race 问题的关键在于构造一个跨线程的 happens-before 关系，所以 JMM 对 `volatile` 的语义做了扩展：
+
+- 保证 `volatile` 变量在一些情况下不会重排序
+- `volatile` 的 64 位变量 `double` 和 `long` 的读取和赋值操作都是原子的
+
+![重排序示意表](https://p0.meituan.net/travelcube/94e93b3a7b49dc4c46b528fde1a03cd967665.png)
+
+> 表中“第二项操作”的含义是指，第一项操作之后的所有指定操作。如，普通读不能与其之后的所有 volatile 写重排序。
+>
+> 另外，JMM 也规定了上述 volatile 和同步块的规则尽适用于存在多线程访问的情景。
+>
+> 例如，若编译器（这里的编译器也包括 JIT，下同）证明了一个 volatile 变量只能被单线程访问，那么就可能会把它做为普通变量来处理。
+>
+> 留白的单元格代表允许在不违反Java基本语义的情况下重排序。
+>
+> 例如，编译器不会对对同一内存地址的读和写操作重排序，但是允许对不同地址的读和写操作重排序。
+
+JMM 还对 `final` 的语义做了扩展：
+
+- 保证一个对象的构建方法结束前，所有 `final` 成员变量都必须完成初始化
+- 前提是没有 `this` 引用溢出
+
+参考资料： [Java内存访问重排序的研究](https://tech.meituan.com/2014/09/23/java-memory-reordering.html)
+
 
 
 待补充：
