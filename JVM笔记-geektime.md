@@ -1300,6 +1300,12 @@ JMM 中最为重要的一个概念便是 **happens-before 关系** ：
 - 保证 `volatile` 变量在一些情况下不会重排序
 - `volatile` 的 64 位变量 `double` 和 `long` 的读取和赋值操作都是原子的
 
+`volatile` 字段的 happens-before 关系指的是在两个不同线程中，`volatile` 的写操作 happens-before 之后对同一字段的读操作：
+
+- 注意，这里的「之后」，指的是时间上的先后
+- 也就是我这边写，你之后再读，这样就一定能读得到我刚刚写的值
+- 而普通字段没有这个保证
+
 ![重排序示意表](https://p0.meituan.net/travelcube/94e93b3a7b49dc4c46b528fde1a03cd967665.png)
 
 > 表中“第二项操作”的含义是指，第一项操作之后的所有指定操作。如，普通读不能与其之后的所有 volatile 写重排序。
