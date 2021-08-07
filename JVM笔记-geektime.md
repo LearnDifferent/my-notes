@@ -1557,9 +1557,65 @@ Heavyweight Lock（重量级锁）是 JVM  中最为基础的锁实现。在这�
 
 然而，对于 JVM 来说，它并不能看到“红灯的剩余时间”，也就 **没办法根据等待时间的长短来选择自旋还是阻塞，所以 JVM 的方案是「自适应自旋」，即根据以往自旋等待时是否能够获得锁，来动态调整自旋的时间（循环数目）**
 
+> **adaptive spinning** : An optimization technique whereby a thread spins waiting for a change-of-state to occur (typically a flag that represents some event has occurred - such as the release of a lock) rather than just blocking until notified that the change has occurred. The "adaptive" part comes from the policy decisions that control how long the thread will spin until eventually deciding to block.
+
 就我们的例子来说，如果之前不熄火等到了绿灯，那么这次不熄火的时间就长一点；如果之前不熄火没等到绿灯，那么这次不熄火的时间就短一点。
 
 **自旋状态还带来另外一个副作用，那便是不公平的锁机制。处于阻塞状态的线程，并没有办法立刻竞争被释放的锁。然而，处于自旋状态的线程，则很有可能优先获得这把锁**
+
+## Lightweight Lock 轻量级锁
+
+深夜的十字路口，车辆来往可能比较少，如果还设置红绿灯交替，那么很有可能出现四个方向仅有一辆车在等红灯的情况。
+
+因此，红绿灯可能被设置为闪黄灯的情况，代表车辆可以通过，但司机需要注意观察。
+
+JVM 也存在着类似的情形：<u>多个线程在不同的时间段请求同一把锁</u>，也就是说没有锁竞争。 **JVM 采用了轻量级锁，来避免重量级锁的阻塞以及唤醒** 。
+
+---
+
+Object Header（对象头）中 Mark Word（标记字段）的最后两位表示该 Object 的锁状态：
+
+- 00 代表 Lightweight Lock（轻量级锁）
+- 01 代表无锁或 Bias Lock（偏向锁）
+- 10 代表 Heavyweight Lock（重量级锁）
+- 11 则跟垃圾回收算法的标记有关
+
+**Lightweight Lock 加锁操作** ：
+
+1. 进行加锁操作时，JVM 会判断<u>是否已经是 Heavyweight Lock</u> （最后两位为“10”）
+
+2. 如果不是 Heavyweight Lock，它会在<u>当前 Thread（线程）的当前 Stack Frame（栈桢）中划出一块空间，作为该 Lock 的 Lock Record</u>（锁记录）
+
+3. JVM 会<u>将 *锁对象* 的 Mark Word 拷贝到之前划出的 Lock Record 中</u>
+
+4. 拷贝成功后，JVM 会尝试用 CAS（compare and swap）操作，<u>替换 *锁对象* 的 Mark Word</u>：
+
+	1. 将 *锁对象的 Mark Word* 更新为 *指向 Lock Record 的指针*
+	2. 将 Lock Record 里的 *owner 指针* 指向 *锁对象的 Mark Word*
+
+5. 如果这个更新动作成功了，那么 *锁对象* Mark Word 的锁标志位就为“00”，表示这个<u>线程拥有了该 *锁对象* 的锁</u>：
+
+	- 设置为“00”是为了「内存对齐」
+
+	- “00”表示此 *锁对象* 处于轻量级锁定状态（Lightweight Lock）
+
+6. 如果 Lightweight Lock 的更新操作失败了，JVM 会检查 *锁对象* 的 Mark Word <u>是否指向当前 Thread 的当前 Stack Frame</u>：
+
+	1. 如果是，说明当前 Thread 已经有了这个 Object 的 Lock：
+		1. 也就是<u>该 Thread 重复获取了同一个 Lock</u>
+		2. 此时，JVM 会<u>将 Lock Record 清零，表示该 Lock 被重复获取</u>
+		3. 然后直接进入同步块继续执行
+	2. 如果不是，说明其他 Thread 持有该 Lock：
+		1. 若当前<u>只有一个等待线程</u>，则当前 Thread 通过<u>自旋</u>进行等待
+		2. 当<u>自旋超过一定的次数</u>，或者<u>一个线程在持有锁、一个在自旋、又有第三个来访</u>时，JVM 会将该 Lock <u>升级为 Heavyweight，并 Block（阻塞）当前 Thread</u>
+
+**Lightweight Lock 解锁操作** ：
+
+1. 当进行解锁操作时，<u>如果当前 Lock Record 的值为 0，则代表重复进入同一把锁，直接返回</u>即可
+	- 一个线程的所有 Lock Record（锁记录）类似一个栈结构
+	- 每次加锁压入一条 Lock Record，解锁弹出一条 Lock Record
+	- 当前 Lock Record 指的便是栈顶的 Lock Record
+2. 否则，Java 虚拟机会尝试用 CAS 操作，比较锁对象的标记字段的值是否为当前锁记录的地址。如果是，则替换为锁记录中的值，也就是锁对象原本的标记字段。此时，该线程已经成功释放这把锁。
 
 
 
