@@ -1540,7 +1540,11 @@ public synchronized void foo(java.lang.Object);
 
 > JVM 中 `synchronized` 关键字的实现，按照代价由高至低可分为重量级锁、轻量级锁和偏向锁三种
 
-> 重量级锁会阻塞、唤醒请求加锁的线程。它针对的是多个线程同时竞争同一把锁的情况。JVM 采取了自适应自旋，来避免线程在面对非常小的 `synchronized` 代码块时，仍会被阻塞、唤醒的情况。
+> Heavyweight Lock（重量级锁）会阻塞、唤醒请求加锁的线程。
+>
+> Heavyweight Lock 针对的是多个线程同时竞争同一把锁的情况。
+>
+> JVM 采取了 adaptive spinning（自适应自旋），来避免线程在面对非常小的 `synchronized` 代码块时，仍会被阻塞、唤醒的情况。
 
 Heavyweight Lock（重量级锁）是 JVM  中最为基础的锁实现。在这种状态下，JVM 会 **阻塞加锁失败的线程，并且在目标锁被释放的时候，唤醒这些线程** 。
 
@@ -1565,6 +1569,14 @@ Heavyweight Lock（重量级锁）是 JVM  中最为基础的锁实现。在这�
 
 ## Lightweight Lock 轻量级锁
 
+> 轻量级锁采用 CAS 操作，将锁对象的 Mark Word（标记字段）替换为一个指针。
+>
+> 该指针指向当前线 Thread 上的一块 Lock Record 空间。
+>
+> 该 Lock Record 存储着锁对象原本的 Mark Word。
+>
+> Lightweight Lock（轻量级锁）针对的是多个线程在不同时间段申请同一把锁的情况。
+
 深夜的十字路口，车辆来往可能比较少，如果还设置红绿灯交替，那么很有可能出现四个方向仅有一辆车在等红灯的情况。
 
 因此，红绿灯可能被设置为闪黄灯的情况，代表车辆可以通过，但司机需要注意观察。
@@ -1586,7 +1598,7 @@ Object Header（对象头）中 Mark Word（标记字段）的最后两位表示
 
 2. 如果不是 Heavyweight Lock，它会在<u>当前 Thread（线程）的当前 Stack Frame（栈桢）中划出一块空间，作为该 Lock 的 Lock Record</u>（锁记录）
 
-3. JVM 会<u>将 *锁对象* 的 Mark Word 拷贝到之前划出的 Lock Record 中</u>
+3. JVM 会 <u>将 *锁对象* 的 Mark Word 拷贝到之前划出的 Lock Record 中</u>
 
 4. 拷贝成功后，JVM 会尝试用 CAS（compare and swap）操作，<u>替换 *锁对象* 的 Mark Word</u>：
 
@@ -1615,7 +1627,11 @@ Object Header（对象头）中 Mark Word（标记字段）的最后两位表示
 	- 一个线程的所有 Lock Record（锁记录）类似一个栈结构
 	- 每次加锁压入一条 Lock Record，解锁弹出一条 Lock Record
 	- 当前 Lock Record 指的便是栈顶的 Lock Record
-2. 否则，Java 虚拟机会尝试用 CAS 操作，比较锁对象的标记字段的值是否为当前锁记录的地址。如果是，则替换为锁记录中的值，也就是锁对象原本的标记字段。此时，该线程已经成功释放这把锁。
+2. 否则，JVM 会尝试用 CAS 操作，比较 *锁对象* 的 Mark Word 的值是否为当前 Lock Record 的地址：
+	1. 如果是，则替换为 Lock Record 中的值，也就是 *锁对象* 原本的 Mark Word。此时，该 Thread 已经成功释放该 Lock
+	2. 如果不是，则意味着该 Lock 已经被升级为 Heavyweight Lock。此时，JVM 会进入 Heavyweight Lock 的释放过程，唤醒因竞争该 Lock 而 blocked 的 Thread
+
+
 
 
 
