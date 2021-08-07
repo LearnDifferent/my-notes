@@ -848,6 +848,14 @@ Object Header（对象头）：
 
 > Note that both Java Objects and VM-internal Objects have a common Object Header format
 
+---
+
+[HotSpot 虚拟机中，对象在内存中存储的布局可以分为三块区域](https://www.cnblogs.com/xiaofuge/p/13895226.html)：
+
+- 对象头（Object Header）
+- 实例数据（Instance Data）
+- 对齐填充（Padding）
+
 Object Header consists of two words （对象头由两部分组成）：
 
 - Mark Word（标记字段）：
@@ -1401,6 +1409,8 @@ Lock（锁操作）具备 happens-before 关系：
 
 - 声明一个 `synchronized` 代码块
 - 直接标记静态方法或者实例方法
+
+> 在 HotSpot 虚拟机中，monitor 是由 C++ 中 ObjectMonitor 实现
 
 当声明 `synchronized` 代码块时，编译而成的字节码将包含 `monitorenter` 和 `monitorexit` 指令。
 
