@@ -1393,6 +1393,139 @@ Lock（锁操作）具备 happens-before 关系：
 
 扩展阅读：[Safe Object Publication in Java](https://vlkan.com/blog/post/2014/02/14/java-safe-publication/)
 
+# JVM 是怎么实现 synchronized 的？
+
+## 抽象的锁实现
+
+`synchronized` 可以对程序进行加锁：
+
+- 声明一个 `synchronized` 代码块
+- 直接标记静态方法或者实例方法
+
+当声明 `synchronized` 代码块时，编译而成的字节码将包含 `monitorenter` 和 `monitorexit` 指令。
+
+这两种指令均会消耗操作数栈上的一个引用类型的元素（也就是 `synchronized` 关键字括号里的引用），作为所要加锁解锁的锁对象。
+
+```java
+public class Foo {
+    public void foo (Object obj) {
+        synchronized (obj) {
+            obj.hashCode();
+        }
+    }
+}
+```
+
+上面的代码通过 `javap -c Foo` 可以得到：
+
+```
+Compiled from "Foo.java"
+public class Foo {
+  public Foo();
+    Code:
+       0: aload_0
+       1: invokespecial #1  // Method java/lang/Object."<init>":()V
+       4: return
+
+  public void foo(java.lang.Object);
+    Code:
+       0: aload_1
+       1: dup
+       2: astore_2
+       3: monitorenter
+       4: aload_1
+       5: invokevirtual #2  // Method java/lang/Object.hashCode:()I
+       8: pop
+       9: aload_2
+      10: monitorexit
+      11: goto          19
+      14: astore_3
+      15: aload_2
+      16: monitorexit
+      17: aload_3
+      18: athrow
+      19: return
+    Exception table:
+       from    to  target type
+           4    11    14   any
+          14    17    14   any
+}
+```
+
+在字节码中，包含一个 `monitorenter` 指令以及多个 `monitorexit` 指令
+
+这是因为 **JVM 需要确保 所获得的锁 在正常执行路径，以及异常执行路径上都能够被解锁**
+
+可以对照字节码和 Exception table（异常处理表）来构造所有可能的执行路径，看看在执行了 `monitorenter` 指令之后，是否都有执行 `monitorexit` 指令。
+
+---
+
+当用 `synchronized` 标记方法时，Java 代码为：
+
+```java
+public class Foo {
+    public synchronized void foo (Object obj) {
+        obj.hashCode();
+    }
+}
+```
+
+使用 `javap -v Foo` 可以获得 `public synchronized void foo (Object obj)` 的字节码为：
+
+```
+public synchronized void foo(java.lang.Object);
+    descriptor: (Ljava/lang/Object;)V
+    flags: (0x0021) ACC_PUBLIC, ACC_SYNCHRONIZED
+    Code:
+      stack=1, locals=2, args_size=2
+         0: aload_1
+         1: invokevirtual #2  // Method java/lang/Object.hashCode:()I
+         4: pop
+         5: return
+      LineNumberTable:
+        line 3: 0
+        line 4: 5
+```
+
+此时字节码中方法的 flags（访问标记）包含 `ACC_SYNCHRONIZED`
+
+`ACC_SYNCHRONIZED`  表示在进入该方法时，JVM 需要进行 `monitorenter` 操作。而在退出该方法时，不管是正常返回，还是向调用者抛异常，JVM 均需要进行 `monitorexit` 操作。
+
+这里 `monitorenter` 和 `monitorexit` 操作所对应的「锁对象」是隐式的：
+
+- 对于实例方法来说，这两个操作对应的锁对象是 `this` 
+- 对于静态方法来说，这两个操作对应的锁对象是则是所在类的 Class 实例
+
+> 关于 `monitorenter` 和 `monitorexit` 的作用，可以抽象地理解为每个锁对象拥有一个锁计数器和一个指向持有该锁的线程的指针。
+
+[monitorenter](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.monitorenter) ：
+
+- Each object is associated with a monitor. A monitor is locked if and only if it has an owner.
+- The thread that executes `monitorenter` attempts to gain ownership of the monitor associated with `objectref` (object reference), as follows:
+- If the <u>entry count</u> of the monitor associated with `objectref` is 0, the thread enters the monitor and sets its entry count to 1. The thread is then the owner of the monitor
+- If the thread already owns the monitor associated with `objectref`, it reenters the monitor, incrementing its <u>entry count</u>
+- If another thread already owns the monitor associated with `objectref`, the thread blocks until the monitor's <u>entry count</u> is 0, then tries again to gain ownership
+
+> 当执行 `monitorenter` 时，如果目标锁对象的计数器为 0，那么说明它没有被其他线程所持有。在这个情况下，JVM 会将该锁对象的持有线程设置为当前线程，并且将其计数器加 1。
+
+> 在目标锁对象的计数器不为 0 的情况下，如果持有锁对象的线程是当前线程，那么 JVM 可以将其计数器加 1，否则需要等待，直至持有线程释放该锁。
+
+[monitorexit](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.monitorexit) ：
+
+- The thread that executes `monitorexit` must be the owner of the monitor associated with the instance referenced by `objectref` .
+- The thread *decrements* the <u>entry count</u> of the monitor associated with `objectref`. 
+- If as a result the value of the <u>entry count</u> is 0, the thread exits the monitor and is no longer its owner. Other threads that are blocking to enter the monitor are allowed to attempt to do so.
+
+> 当执行 monitorexit 时，JVM 则需将锁对象的计数器减 1。当计数器减为 0 时，那便代表该锁已经被释放掉了。
+
+之所以 **采用这种计数器的方式，是为了允许同一个线程重复获取同一把锁** 。
+
+举个例子，如果一个 Java 类中拥有多个 `synchronized` 方法，那么这些 <u>方法之间的相互调用</u>，不管是直接的还是间接的，都<u>会涉及对同一把锁的重复加锁操作</u>。
+
+因此，我们需要设计这么一个可重入的特性，来避免编程里的隐式约束。
+
+这就是抽象的锁算法，下面就会介绍 JVM 具体的锁实现。
+
 
 
 
