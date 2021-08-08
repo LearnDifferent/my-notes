@@ -1631,6 +1631,32 @@ Object Header（对象头）中 Mark Word（标记字段）的最后两位表示
 	1. 如果是，则替换为 Lock Record 中的值，也就是 *锁对象* 原本的 Mark Word。此时，该 Thread 已经成功释放该 Lock
 	2. 如果不是，则意味着该 Lock 已经被升级为 Heavyweight Lock。此时，JVM 会进入 Heavyweight Lock 的释放过程，唤醒因竞争该 Lock 而 blocked 的 Thread
 
+## Bias Lock 偏向锁
+
+> Bias Lock 只会在第一次请求时采用 CAS 操作，在锁对象的 Mark Word 中记录下当前 Thread 的地址。
+>
+> 在之后的运行过程中，持有该 Bias Lock 的 Thread 的加锁操作将直接返回。
+>
+> Bias Lock 针对的是 Lock 仅会被同一线程持有的情况。
+
+如果说 Lightweight Lock 针对的情况很乐观，那么接下来的 Bias Lock 针对的情况则更加乐观： **从始至终只有一个线程请求某一把锁**
+
+> 这就好比你在私家庄园里装了个红绿灯，并且庄园里只有你在开车。Bias Lock 的做法便是在红绿灯处识别来车的车牌号。如果匹配到你的车牌号，那么直接亮绿灯。
+
+具体来说，在线程进行加锁时，如果该 *锁对象* 支持 Bias Lock，那么 JVM 会通过 CAS 操作，将当前 Thread 的地址记录在锁对象的 Mark Word 中，并且将 Mark Word 的最后三位设置为 `101`
+
+在接下来的运行过程中，每当有 Thread 请求这个 Lock，JVM 只需判断 *锁对象* 的 Mark Word 中：
+
+1. 最后三位是否为 `101`
+2. 是否包含当前线程的地址
+3. epoch 值是否和锁对象的类的 epoch 值相同
+
+如果都满足，那么当前 Thread 持有该 Bias Lock，可以直接返回。
+
+
+
+
+
 
 
 
