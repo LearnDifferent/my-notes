@@ -1403,6 +1403,11 @@ Lock（锁操作）具备 happens-before 关系：
 
 # JVM 是怎么实现 synchronized 的？
 
+拓展阅读：
+
+- [不可不说的Java“锁”事](https://tech.meituan.com/2018/11/15/java-lock.html)
+- [浅谈偏向锁、轻量级锁、重量级锁](https://juejin.cn/post/6844903550586191885)
+
 ## 抽象的锁实现
 
 `synchronized` 可以对程序进行加锁：
@@ -1694,8 +1699,6 @@ Revocation can be implemented in various ways - signals, suspension, and safepoi
 此时，JVM 会撤销该<u>类</u>所有 Instance（实例）的 Bias Lock，并且在之后的加锁过程中，直接为该<u>类</u>的 Instance 设置 Lightweight Lock
 
 参考资料：[Biased Locking in HotSpot](https://blogs.oracle.com/dave/biased-locking-in-hotspot)
-
-
 
 
 
