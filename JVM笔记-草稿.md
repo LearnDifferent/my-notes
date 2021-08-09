@@ -1,42 +1,38 @@
 # 总体划分
 
-下图为 JDK 的体系结构：
-
-![JDK体系结构](https://gimg2.baidu.com/image_search/src=http%3A%2F%2Ftva1.sinaimg.cn%2Flarge%2F006tNbRwly1gbmnj3i2fyj315m0rc0z8.jpg&refer=http%3A%2F%2Ftva1.sinaimg.cn&app=2002&size=f9999,10000&q=a80&n=0&g=0n&fmt=jpeg?sec=1630150868&t=3c5d9d50f6e74dc7e55a7f7783998eda)
-
 [JVM 的运行时数据区域和直接内存](https://blog.csdn.net/clover_lily/article/details/80087162)：
 
-1. JVM 运行时数据区 Runtime Data Areas：
+1. JVM 运行时数据区（Runtime Data Areas0：
     * 由 JVM 管理的区域
-2. 直接内存 Direct Memory：
+2. 直接内存（Direct Memory）：
     * JVM 之外的内存，开发人员自己分配 / 回收内存。
 
 ```java
 public class test{
 
     public static void main(String[] args) {
-        int a = 1; // 是 main 方法的局部变量 Local Variable，存在栈 Stack 内，是会被运行的部分。注意，也只有运行的时候，才会进入栈 Stack 内。
+        int a = 1; // 是 main 方法的 Local Variable（局部变量），存在 Stack（栈）内，是会被运行的部分。注意，也只有运行的时候，才会进入 Stack 内。
 
-        Teacher john = new Teacher(); // john 是 main 方法的 Local Variable，等于 john 可以被操作。
+        Teacher john = new Teacher(); // john 是 main 方法的 Local Variable，也就是说 john 可以被操作。
 
-        john.stu = new Student(); // john.stu 是 Teacher.class 的全局变量/成员变量 Global Variable。这里表示，让 Teacher john 的 stu 变量指向 new Student();
+        john.stu = new Student(); // john.stu 是 Teacher.class（类）的 Global Variable（全局变量/成员变量）。这里表示，让 Teacher john 的 stu 变量指向 new Student();
     }
 
 
     class Teacher {
 
-        String name = "John"; // 实例字段的值存在堆 Heap 内（& 类的结构信息存在方法区 Method Area 内）
-        int age = 40; // 是全局变量 global variable，存在堆 Heap（& Method Area）
+        String name = "John"; // 实例字段的值存在 Heap 内（& 类的结构信息存在方法区 Method Area 内）
+        int age = 40; // 是 global variable，存在 Heap（& Method Area）中
         boolean gender_male = true; // Heap（& Method Area）
         Student stu; // Heap（& Method Area）这个值会指向 Student 对象
 
 
-        static boolean isHuman = true; // 静态字段 （& 类的结构信息存在方法区 Method Area 内
+        static boolean isHuman = true; // 静态字段（& 类的结构信息存在方法区 Method Area 内）
 
 
         public void shout() {
             System.out.println("Teacher is shouting.");
-        } // 实例方法存在
+        } 
     }
 
 
@@ -105,12 +101,20 @@ public class test{
 
 ### 虚拟机栈 Java Virtual Machine Stacks
 
-* 每个线程运行的时候，Stacks 都会开辟一个区域给线程，线程的每个方法，每个方法需要的每个局部变量等，都会在 Stacks 中按照顺序执行
-* 操作数栈：
-    * 临时存放并操作数值的内存空间。
-    * 先把数值放入其中
-    * 如果需要赋值局部变量，就将数值放到需要的局部变量内
-    * 如果需要计算，就弹出 2 个最近的值，然后根据加减乘除对这 2 个值进行运算，结束后重新押回操作数栈
+JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
+
+- 每个 Thread 运行的时候，Stacks 都会开辟一个区域给 Thread，Thread 的每个方法，每个方法需要的每个 Local Variables 等，都会在 Stacks 中按照顺序执行
+
+也就是说，**只要 Thread 开始运行，JVM 就会分配一个专属的内存空间给该 Thread。在 Thread 上运行的 Method、Method 所需要的 Local Variables 及其他 Thread 相关的数据，也会被存在该内存空间中。该内存空间就是 Stack(s)。**
+
+---
+
+Operand Stack（操作数栈）
+
+* 定义：临时存放并操作 value（数值）的内存空间
+* 存放 value：JVM 先把某个 value 放入 Operand Stack 中
+* 操作 value：如果需要赋值某个 Local Variable，就将之前存入的 value 该 Local Variable 中
+* 操作 value：如果需要计算，Operand Stack 就会弹出最近的 2 个 value，然后根据加减乘除对这 2 个 value 进行运算操作，得到结束后重新押回 Operand Stack 中
 
 
 Java Virtual Machine Stacks・仮想マシン・スタック
@@ -143,7 +147,7 @@ Stack Frame Structure
     * It contains all symbolic reference (constant pool resolution) and normal method return related to that particular method.
     * It also contains a reference to Exception table which provide the corresponding catch block information in the case of exceptions.
 
-节选自：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)，可以用[用印象笔记打开](https://app.yinxiang.com/shard/s72/nl/16998849/b2dc562e-3b7c-4816-8983-5f019c6cd369/)
+参考资料：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
 
 ***
 
