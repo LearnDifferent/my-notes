@@ -1,3 +1,5 @@
+这是极客时间的教程「深入拆解Java虚拟机」的笔记。
+
 # Java 虚拟机是怎么运行 Java 字节码的？
 
 为什么使用 JVM 来运行 Java 字节码？
@@ -1405,7 +1407,7 @@ Lock（锁操作）具备 happens-before 关系：
 
 拓展阅读：
 
-- [不可不说的Java“锁”事](https://tech.meituan.com/2018/11/15/java-lock.html)
+- [不可不说的Java“锁”事](https://tech.meituan.com/2018/11/15/java-lock.html) 或 [该文章的备份](https://github.com/LearnDifferent/my-notes/blob/full/Java%E7%9A%84%E9%94%81_Lock_JVM_%E7%BE%8E%E5%9B%A2%E6%8A%80%E6%9C%AF%E5%9B%A2%E9%98%9F_%E4%B8%8D%E5%8F%AF%E4%B8%8D%E8%AF%B4%E7%9A%84Java%E2%80%9C%E9%94%81%E2%80%9D%E4%BA%8B.md)
 - [浅谈偏向锁、轻量级锁、重量级锁](https://juejin.cn/post/6844903550586191885)
 
 ## 抽象的锁实现
@@ -1700,11 +1702,9 @@ Revocation can be implemented in various ways - signals, suspension, and safepoi
 
 参考资料：[Biased Locking in HotSpot](https://blogs.oracle.com/dave/biased-locking-in-hotspot)
 
-
-
-
-
 待补充：
 
 - [ ] JVM 是怎么实现 invokedynamic 的？
 - [ ] JVM 是如何实现反射的
+- [ ] Java 语法糖与 Java 编译器
+- [ ] 即时编译
