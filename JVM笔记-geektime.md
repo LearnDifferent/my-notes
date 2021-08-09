@@ -1641,7 +1641,11 @@ Object Header（对象头）中 Mark Word（标记字段）的最后两位表示
 
 如果说 Lightweight Lock 针对的情况很乐观，那么接下来的 Bias Lock 针对的情况则更加乐观： **从始至终只有一个线程请求某一把锁**
 
+Since most objects are locked by at most one thread during their lifetime, we allow that thread to **bias** an object toward itself.
+
 > 这就好比你在私家庄园里装了个红绿灯，并且庄园里只有你在开车。Bias Lock 的做法便是在红绿灯处识别来车的车牌号。如果匹配到你的车牌号，那么直接亮绿灯。
+
+<u>Once biased, that thread can subsequently lock and unlock the object without resorting to expensive atomic instructions</u>. Obviously, an object can be biased toward at most one thread at any given time. (We refer to that thread as the bias holding thread)
 
 具体来说，在线程进行加锁时，如果该 *锁对象* 支持 Bias Lock，那么 JVM 会通过 CAS 操作，将当前 Thread 的地址记录在锁对象的 Mark Word 中，并且将 Mark Word 的最后三位设置为 `101`
 
@@ -1653,7 +1657,43 @@ Object Header（对象头）中 Mark Word（标记字段）的最后两位表示
 
 如果都满足，那么当前 Thread 持有该 Bias Lock，可以直接返回。
 
+---
 
+**Bias Lock 的撤销**
+
+If another thread tries to acquire a biased object, however, we need to **revoke** the bias from the original thread. At this juncture we can either <u>rebias the object</u> or simply <u>revert to normal locking</u> for the remainder of the object's lifetime.
+
+The key challenge in revocation is to coordinate the revoker and the revokee (the bias holding thread) -- we must <u>ensure that the revokee doesn't lock or unlock the object during revocation</u>.
+
+「当请求加锁的 Thread」和 「*锁对象*  Mark Word 中保存的 Thread 的地址」不匹配时：
+
+- 如果 epoch 值不相等，当前 Thread 可以将该 Lock 偏向 （bias）自己
+- 如果  epoch 值相等，JVM 需要撤销该 Bias Lock
+
+**撤销 Bias Lock 需要持有该 Bias Lock  的 Thread 到达 Safepoint（安全点），再将 Bias Lock  替换为 Lightweight Lock**
+
+Revocation can be implemented in various ways - signals, suspension, and safepoints to name a few.
+
+如果某一<u>类</u> *锁对象* 的总撤销数超过了一个阈值（JVM 参数 `-XX:BiasedLockingBulkRebiasThreshold` ，默认为 20），那么 JVM 会宣布这个<u>类</u>的 **当前 epoch 值的 Bias Lock 失效** （不是“撤销”，而是“失效”）。具体的做法：
+
+- 在每个类中维护一个 epoch 值
+	- 可以理解为第几代 Bias Lock
+- 当设置 Bias Lock 时，JVM 需要将该 epoch 值拷贝到 *锁对象* 的 Mark Word 中
+- 宣布某个<u>类</u>的 Bias Lock 失效，实际上就是 JVM 将该<u>类</u>的 epoch 值 `+1` 
+	- epoch 值 `+1` 后，表示 Bias Lock 更新为新的一代，所以之前那一代的 Bias Lock 就会失效
+- 设置新的 Bias Lock 时，JVM 就会拷贝该<u>类</u>的新的 epoch 值
+
+当某个<u>类</u>的 epoch 值发生变化时，为了保证当前已经对「该<u>类</u>的 Bias Lock 加锁」的 Thread 不受影响：
+
+- JVM 会遍历所有线程的 Java 栈，找到该<u>类</u>已经加锁的 instance（实例）
+- 将这些 instance 的 mark word 中的 epoch 值 `+1`
+- 注意：该操作需要所有 Thread 处于 Safepoint 状态
+
+如果总撤销数继续增加，且超过了<u>另一个阈值</u>（不是之前那个阈值，这个的参数为 `-XX:BiasedLockingBulkRevokeThreshold` ，默认值为 40），那么 JVM 会认为这个<u>类</u>已经不再适用于 Bias Lock 的情况
+
+此时，JVM 会撤销该<u>类</u>所有 Instance（实例）的 Bias Lock，并且在之后的加锁过程中，直接为该<u>类</u>的 Instance 设置 Lightweight Lock
+
+参考资料：[Biased Locking in HotSpot](https://blogs.oracle.com/dave/biased-locking-in-hotspot)
 
 
 
