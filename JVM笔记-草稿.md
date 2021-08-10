@@ -192,11 +192,29 @@ Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspa
 - 生命周期等于线程的生命周期
 - 线程私有 = **线程安全 Thread Safety** （Thread-safe / スレッドセーフ）
 
+As each new thread comes into existence, it gets its own *pc register* (program counter) and *Java stack*.
 
+![Figure 5-3. Runtime data areas exclusive to each thread.](https://www.artima.com/insidejvm/ed2/images/fig5-3.gif)
+
+> 图：Figure 5-3. Runtime data areas exclusive to each thread.
+
+Figure 5-3 shows a snapshot of a virtual machine instance in which three threads are executing. At the instant of the snapshot, threads one and two are executing Java methods. Thread three is executing a native method.
+
+In Figure 5-3, as in all graphical depictions of the Java stack in this book, the <u>stacks are shown growing downwards</u>. <u>The "top" of each stack is shown at the bottom of the figure</u>. 
+
+Stack frames for currently executing methods are shown in a lighter shade. For threads that are currently executing a Java method, the <u>pc register indicates the next instruction to execute</u>. In Figure 5-3, such pc registers (the ones for threads one and two) are shown in a lighter shade. Because thread three is currently executing a native method, the contents of its pc register--the one shown in dark gray--is undefined.
 
 参考资料：[Chapter 5 of Inside the Java Virtual Machine by Bill Venners](https://www.artima.com/insidejvm/ed2/jvm2.html)
 
 ## 虚拟机栈 Java Virtual Machine Stacks
+
+A thread's **Java stack stores the state of Java (not native) method invocations for the thread** . 
+
+The <u>state of a Java method invocation</u> includes its **local variables, the parameters with which it was invoked, its return value (if any), and intermediate calculations** .
+
+> The state of native method invocations is stored in an implementation-dependent way in *native method stacks*, as well as possibly in registers or other implementation-dependent memory areas
+>
+> 参考：Native Method Stacks
 
 JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
 
@@ -204,13 +222,23 @@ JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
 
 也就是说，**只要 Thread 开始运行，JVM 就会分配一个专属的内存空间给该 Thread。在 Thread 上运行的 Method 所需要的 Local Variables 及其他 Thread 相关的数据，也会被存在该内存空间中。该内存空间就是 Stack(s)。**
 
+---
+
+The Java stack is composed of **stack frames** (or *frames*). 
+
+**A stack frame contains the state of one Java method invocation** :
+
+- When a thread invokes a method, the JVM pushes a new frame onto that thread's Java stack
+- When the method completes, the VM pops and discards the frame for that method
+
+---
+
 Operand Stack（操作数栈）
 
 * 定义：临时存放并操作 value（数值）的内存空间
 * 存放 value：JVM 先把某个 value 放入 Operand Stack 中
 * 操作 value：如果需要赋值某个 Local Variable，就将之前存入的 value 该 Local Variable 中
 * 操作 value：如果需要计算，Operand Stack 就会弹出最近的 2 个 value，然后根据加减乘除对这 2 个 value 进行运算操作，得到结束后重新押回 Operand Stack 中
-
 
 Java Virtual Machine Stacks・仮想マシン・スタック
 
@@ -315,9 +343,11 @@ Stack Frame Structure
 
 ## 程序计数器 Program Counter Register
 
+If the thread is executing a Java method (not a native method), <u>the value of the pc register indicates the next instruction to execute</u>. 
+
 假设在运行一个线程的某个方法时候，有优先级更高的线程抢占了 CPU 资源，此时之前的线程被挂起，等 CPU 资源空闲后再继续，为了继续线程的时候能回到之前执行的方法，就需要 *程序计数器*
 
-就是一个指向 *方法区* 的指针，指向程序当前运行的位置。
+其实就是一个指向 *方法区* 的指针，该指针具体指向程序当前运行的位置。
 ```
 0: aload_1
 1: invokevirtual
