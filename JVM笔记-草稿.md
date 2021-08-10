@@ -45,13 +45,13 @@ public class test{
 }
 ```
 
-## 线程共享部分
+# 线程共享部分
 
 线程共享：所有线程都能访问这块内存数据，生命周期贯穿虚拟机 / GC（Garbage Collection）。
 
 线程共享 = **线程不安全**
 
-### 元空间 / 方法区（Metaspace / Method Area）
+## 元空间 / 方法区（Metaspace / Method Area）
 
 元空间 / 方法区是被线程共享的，JDK 7 之前被称为永久带，JDK 8 之后为元空间。
 
@@ -66,7 +66,7 @@ public class test{
     1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
     2. 只要该类对象还有被引用，就不能被回收
 
-### 堆内存 Heap
+## 堆内存 Heap
 
 > 栈主要管运行，堆主要管存储
 >
@@ -93,21 +93,19 @@ public class test{
 
 > 详细请看 GC 部分的
 
-## 线程独占部分 / 线程私有
+# 线程独占部分 / 线程私有
 
 线程独占部分：每个线程都有独立空间，生命周期等于线程的生命周期。
 
 线程私有 = **线程安全 Thread Safety**
 
-### 虚拟机栈 Java Virtual Machine Stacks
+## 虚拟机栈 Java Virtual Machine Stacks
 
 JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
 
 - 每个 Thread 运行的时候，Stacks 都会开辟一个区域给 Thread，Thread 的每个方法，每个方法需要的每个 Local Variables 等，都会在 Stacks 中按照顺序执行
 
-也就是说，**只要 Thread 开始运行，JVM 就会分配一个专属的内存空间给该 Thread。在 Thread 上运行的 Method、Method 所需要的 Local Variables 及其他 Thread 相关的数据，也会被存在该内存空间中。该内存空间就是 Stack(s)。**
-
----
+也就是说，**只要 Thread 开始运行，JVM 就会分配一个专属的内存空间给该 Thread。在 Thread 上运行的 Method 所需要的 Local Variables 及其他 Thread 相关的数据，也会被存在该内存空间中。该内存空间就是 Stack(s)。**
 
 Operand Stack（操作数栈）
 
@@ -151,30 +149,6 @@ Stack Frame Structure
 
 ***
 
-> 栈主要管运行，堆主要管存储
->
-> 栈存放的内容和程序运行相关，主要存储函数运行过程中的临时变量
-
-* **Stack** 存储的是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
-* **Heap** 主要**存储对象**
-* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
-    * JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
-    * 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
-
-例子：User u = new User();
-
-* `new` 关键字会在 Heap 中创建新的 User 对象
-* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息，会指向 Heap 中的 User 对象
-
-> 栈内存不存在垃圾回收问题
-
-栈内存，主要管理程序的运行，生命周期和线程同步：
-
-* 线程结束的时候，栈内存也就释放了（注意，main 也是一个进程）
-* 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
-* 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
-
-***
 下面的待整理，不知道是对还是错
 
 栈帧结构
@@ -235,14 +209,42 @@ Stack Frame Structure
 
     * 动态引用：存在于 Stack Frame 内，用于找到方法区 Method Area / Metaspace 里面的方法代码
 
-* 返回值地址 Return Address 与栈帧 Stack Frame：
+* Return Address（返回值地址、方法出口）  与栈帧 Stack Frame：
 
     * 一个 Stack Frame /运行的方法在结束后，会得到一个值，这个值要返回到之前的方法内：
         * main 方法的 Stack Frame 里面有一个 int result = calculate();
         * 此时会生成 calculate() 方法的 Stack Frame，然后优先计算出结果。这个结果需要返回到 main 方法内，赋值给 main 方法的 int result
     * Return Address 就是在 Stack Frame 划出一块区域，用于储存需要 return 的前一个 stack 的内存地址
 
-### 本地方法栈 Native Method Stack
+## 程序计数器 Program Counter Register
+
+假设在运行一个线程的某个方法时候，有优先级更高的线程抢占了 CPU 资源，此时之前的线程被挂起，等 CPU 资源空闲后再继续，为了继续线程的时候能回到之前执行的方法，就需要 *程序计数器*
+
+就是一个指向 *方法区* 的指针，指向程序当前运行的位置。
+```
+0: aload_1
+1: invokevirtual
+4: pop
+5: return
+```
+
+比如上面的字节码中的 `0: aload_1` ：
+
+- `0` 就是字节码指令的行号（位置）
+- `aload_1` 就是需要运行的字节码指令
+- 「字节码指令」对应的是：「指令方法」在方法区内的「Memory Address（内存地址）」
+
+[PC Register 为什么存放的不是「指令本身」而是「指令的存放地址」？](程序计数器为什么存放的不是指令本身而是指令的存放地址。？ - 花泽小鱼干的回答 - 知乎 https://www.zhihu.com/question/318129637/answer/637300541)
+
+- 因为除了程序计数器（PC, PC Register）外还有个指令寄存器（IR, Instruction Register）
+- IR 是存放当前执行指令的，而 PC 指向的是下条执行指令的地址
+- 所以，PC 用地址取值的方式，便于执行跳转指令
+
+[PC Register](https://app.yinxiang.com/shard/s72/nl/16998849/c39de305-2e8a-4989-bf7b-ca4ec847d4d1/)：
+
+> 程序计数器其实就是一个指针，它指向了我们程序中下一句需要执行的指令，它也是内存区域中唯一一个不会出现 OutOfMemoryError 的区域，而且占用内存空间小到基本可以忽略不计。这个内存仅代表当前线程所执行的字节码的行号指示器，字节码解析器通过改变这个计数器的值选取下一条需要执行的字节码指令。如果执行的是 native 方法，那这个指针就不工作了。
+
+## 本地方法栈 Native Method Stack
 
 存放 JVM 底层的 C 和 C++ 等语言实现的 Java 方法。
 
@@ -250,15 +252,40 @@ Stack Frame Structure
 
 > [本地方法栈(Native Method Stack)和Java虚拟机栈类似，区别在于Java虚拟机栈是为了Java方法服务的，而本地方法栈是为了native方法服务的。在虚拟机规范中并没有对本地方法实现所采用的编程语言与数据结构采取强制规定，因此不同的JVM虚拟机可以自己实现自己的native方法。](https://app.yinxiang.com/shard/s72/nl/16998849/74009fbe-a516-41e2-8920-f48cc4593957/)
 
-### 程序计数器 Program Counter Register
+# 对比 JVM Stack 和 Heap
 
-* 假设在运行一个线程的某个方法时候，有优先级更高的线程抢占了 CPU 资源，此时之前的线程被挂起，等 CPU 资源空闲后再继续，为了继续线程的时候能回到之前执行的方法，就需要 *程序计数器*
+Stack 主要管运行，Heap 主要管存储。
 
-就是一个指向方法区的指针，指向程序当前运行的位置。
+Stack 存放的内容和程序运行相关，主要存储函数运行过程中的临时变量。
 
-PC Register：
+* **Stack** 存储的是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
+* **Heap** 主要**存储对象**
+* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
+	* JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
+	* 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
 
-> [程序计数器其实就是一个指针，它指向了我们程序中下一句需要执行的指令，它也是内存区域中唯一一个不会出现 OutOfMemoryError 的区域，而且占用内存空间小到基本可以忽略不计。这个内存仅代表当前线程所执行的字节码的行号指示器，字节码解析器通过改变这个计数器的值选取下一条需要执行的字节码指令。如果执行的是 native 方法，那这个指针就不工作了。](https://app.yinxiang.com/shard/s72/nl/16998849/c39de305-2e8a-4989-bf7b-ca4ec847d4d1/)
+例子：User u = new User();
+
+* `new` 关键字会在 Heap 中创建新的 User 对象
+* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息，会指向 Heap 中的 User 对象
+
+> 栈内存不存在垃圾回收问题
+
+栈内存，主要管理程序的运行，生命周期和线程同步：
+
+* 线程结束的时候，栈内存也就释放了（注意，main 也是一个进程）
+* 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
+* 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
+
+***
+
+
+
+
+
+
+
+
 
 # 知识点
 
