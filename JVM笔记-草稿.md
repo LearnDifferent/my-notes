@@ -2,10 +2,14 @@
 
 [JVM 的运行时数据区域和直接内存](https://blog.csdn.net/clover_lily/article/details/80087162)：
 
-1. JVM 运行时数据区（Runtime Data Areas0：
+1. JVM 运行时数据区（Runtime Data Areas）：
     * 由 JVM 管理的区域
 2. 直接内存（Direct Memory）：
     * JVM 之外的内存，开发人员自己分配 / 回收内存。
+
+[Some runtime data areas are shared among all of an application's threads and others are unique to individual threads](https://stackoverflow.com/a/22953099).
+
+参考资料：[Chapter 5 of Inside the Java Virtual Machine by Bill Venners](https://www.artima.com/insidejvm/ed2/jvm2.html)
 
 ```java
 public class test{
@@ -13,7 +17,10 @@ public class test{
     public static void main(String[] args) {
         int a = 1; // 是 main 方法的 Local Variable（局部变量），存在 Stack（栈）内，是会被运行的部分。注意，也只有运行的时候，才会进入 Stack 内。
 
-        Teacher john = new Teacher(); // john 是 main 方法的 Local Variable，也就是说 john 可以被操作。
+      	// Teacher 所涉及的 Teacher.class 存放在 Metaspace
+      	// john 是 main 方法的 Local Variable，也是一个 Reference，是可以被操作、运行的，所以放在 Stack 中
+      	// new Teacher() 生成了 Instance（实例化的对象），该 Instance 存放在 Heap 中
+        Teacher john = new Teacher();
 
         john.stu = new Student(); // john.stu 是 Teacher.class（类）的 Global Variable（全局变量/成员变量）。这里表示，让 Teacher john 的 stu 变量指向 new Student();
     }
@@ -47,24 +54,80 @@ public class test{
 
 # 线程共享部分
 
+**Some runtime data areas are shared among all threads**
+
 线程共享：所有线程都能访问这块内存数据，生命周期贯穿虚拟机 / GC（Garbage Collection）。
 
-线程共享 = **线程不安全**
+线程共享 = **线程不安全** 
+
+[**Each instance of the JVM has one Metaspace and one Heap**. These areas are shared by all threads running inside the VM.](https://stackoverflow.com/a/22953099)
 
 ## 元空间 / 方法区（Metaspace / Method Area）
 
-元空间 / 方法区是被线程共享的，JDK 7 之前被称为永久带，JDK 8 之后为元空间。
+Metaspace / Method Area（元空间 / 方法区）是被线程共享（线程不安全）的，JDK 7 之前被称为永久带，JDK 8 之后为元空间。
 
-> 主要存储元数据信息
+[Metaspace (Method Area) is used to manage memory for **class metadata** ](https://wiki.openjdk.java.net/display/HotSpot/Metaspace):
 
-元空间 / 方法区内只有：`static` 静态变量、`final` 常量、`Class` 类信息（构造方法、接口定义）和运行时的常量池。
+- Class metadata are allocated when classes are loaded
+- Their lifetime is usually scoped to that of the loading classloader - when a loader gets collected, all class metadata it accumulated are released in bulk
 
-> 注意，实例变量存在堆内存（Heap）中，和方法区无关
+Metaspace 主要存储元数据信息：
 
-* 作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
-* GC 垃圾回收的效率低：
-    1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
-    2. 只要该类对象还有被引用，就不能被回收
+- `static` 静态修饰
+- `final` 修饰
+- `Class` 类信息（class 类、interface 接口、enum 枚举、annotation 注解）：
+	- 类的构造方法
+	- 完整有效的包名+类名
+	- 父类的信息
+	- 修饰符：public、abstract、final……
+	- Field（域）的信息：名称、类型、修饰符
+	- Method（方法）的信息：名称、返回类型、参数的数量和类型（按顺序）、修饰符、字节码等
+- 运行时的常量池
+
+[Runtime Constant Pool](https://stackoverflow.com/a/22953099) :
+
+- A class file keeps all its symbolic references in one place, the constant pool. 
+- Each class file has a constant pool, and each class or interface loaded by the JVM has an internal version of its constant pool called the **runtime constant pool** .
+- The Runtime Constant Pool is an implementation-specific data structure that <u>maps to the constant pool in the class file</u>.
+- Thus, after a Type is initially loaded, <u>all the symbolic references from the Type will reside in the type's Runtime Constant Pool</u>.
+
+
+
+> 注意，实例变量存在堆内存（Heap）中，和 Metaspace / Method Area 无关
+
+作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
+
+GC 垃圾回收的效率低：
+1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
+2. 只要该类对象还有被引用，就不能被回收
+
+---
+
+[**设置 Metaspace / Method Aread 的大小**](https://zhuanlan.zhihu.com/p/344537168)
+
+**JDK7及以前**
+
+- 通过 `-xx:Permsize` 来设置永久代初始分配空间。默认值是20.75M。
+- `-XX:MaxPermsize` 来设定永久代最大可分配空间。32 位机器默认是 64M，64 位机是 82M。
+- 当 JVM 加载的类信息容量超过了这个值，会报异常 OutofMemoryError:PermGen space。
+
+![img](https://pic3.zhimg.com/80/v2-ca20cf7bc38fda111f4b194a199fc6ea_1440w.jpg)
+
+**JDK8以后**
+
+Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspaceSize` 指定** ：
+
+- `-XX:MetaspaceSize` 设置 Metaspace 的<u>初始大小</u>
+	- 对于一个 64 位的服务器端 JVM 来说，其默认值为 21MB
+	- 一旦触及这个大小，就会触发 FullGC 并卸载无用的 Class（即，这些 Class 对应的 ClassLoader 不再存活）
+- 在经过了 FullGC 后，Metaspace 的<u>初始大小</u>会被重置。新的 size 大小取决于 FullGC 释放了多少空间：
+	- 如果 GC 释放的空间不足，则适当提高该值，不过也不能超过 `-XX:MaxMetaspaceSize` 指定的值
+	- 如果 GC 释放空间过多，则适当降低该值
+- 如果 `-XX:MetaspaceSize` 设置的过低，触发了多次 FullGC，那么应该将其设置为更高的值
+
+如果 Metaspace 发生溢出，JVM 会抛出异常`OutOfMemoryError:Metaspace` 
+
+
 
 ## 堆内存 Heap
 
@@ -93,11 +156,13 @@ public class test{
 
 > 详细请看 GC 部分的
 
-# 线程独占部分 / 线程私有
+# 线程独占部分 / 线程私有 / Thread Safety
+
+**Some runtime data areas are unique to individual threads**
 
 线程独占部分：每个线程都有独立空间，生命周期等于线程的生命周期。
 
-线程私有 = **线程安全 Thread Safety**
+线程私有 = **线程安全 Thread Safety** （Thread-safe / スレッドセーフ）
 
 ## 虚拟机栈 Java Virtual Machine Stacks
 
