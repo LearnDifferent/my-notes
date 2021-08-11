@@ -13,7 +13,7 @@ When a JVM runs a program, it needs memory to store many things, including <u>by
 
 JVM organizes the memory it needs <u>to execute a program into several *runtime data areas*</u>. 
 
-Some runtime data areas are shared among all of an application's threads and others are unique to individual threads.
+**Some runtime data areas are shared among all of an application's threads and others are unique to individual threads.**
 
 参考资料：[Chapter 5 of Inside the Java Virtual Machine by Bill Venners](https://www.artima.com/insidejvm/ed2/jvm2.html)
 
@@ -83,6 +83,8 @@ When the VM loads a class file, it parses information about a type from the bina
 
 ## 元空间 / 方法区（Metaspace / Method Area）
 
+### Metaspace / Method Aread 基础
+
 Metaspace / Method Area（元空间 / 方法区）是被线程共享（线程不安全）的，JDK 7 之前被称为永久带，JDK 8 之后为元空间。
 
 [Metaspace (Method Area) is used to manage memory for **class metadata** ](https://wiki.openjdk.java.net/display/HotSpot/Metaspace):
@@ -92,8 +94,8 @@ Metaspace / Method Area（元空间 / 方法区）是被线程共享（线程不
 
 Metaspace 主要存储元数据信息：
 
-- `static` 静态变量
-- `final` 常量
+- `static` 静态变量（static variable / スタティック変数）
+- `final` 常量（constant / 定数 | ていすう）
 - `Class` 类信息（class 类、interface 接口、enum 枚举、annotation 注解）：
 	- 类的构造方法
 	- 完整有效的包名+类名
@@ -103,14 +105,27 @@ Metaspace 主要存储元数据信息：
 	- Method（方法）的信息：名称、返回类型、参数的数量和类型（按顺序）、修饰符、字节码等
 - Runtime Constant Pool（运行时的常量池）
 
+---
+
+```java
+public class Test {
+    public static Teacher teacher = new Teacher();
+}
+
+class Teacher {
+}
+```
+
+上面的代码中，`static` 修饰的静态变量 `teacher` 是存在于 Metaspace 中的。这个静态变量 `teacher` 实际上存储的是一串内存地址。该内存地址指向被 `new` 出来的 `Teacher` 对象在 Heap 中的位置。
+
+### Runtime Constant Pool 相关知识
+
 Runtime Constant Pool:
 
 - Each class file has a **constant pool** , and each class or interface loaded by the JVM has an internal version of its constant pool called the **Runtime Constant Pool** .
 - The **Runtime Constant Pool** is an implementation-specific data structure that <u>maps to the constant pool in the class file</u>.
 - Thus, after a Type is initially loaded, <u>all the symbolic references from the Type will reside in the type's Runtime Constant Pool</u>.
 - [When creating a class or interface, if the construction of the run-time constant pool requires more memory than can be made available in the method area of the Java Virtual Machine, the Java Virtual Machine throws an `OutOfMemoryError`.](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.5)
-
----
 
 Constant Pool:
 
@@ -133,17 +148,7 @@ Constant Pool:
 - 方法句柄和方法类型（Method Handle、Method Type、Invoke Dynamic）
 - 动态调用点和动态常量（Dynamically-Computed Call Site、Dynamically-Computed Constant）
 
----
-
-> 注意，实例变量存在堆内存（Heap）中，和 Metaspace / Method Area 无关
-
-作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
-
-GC 垃圾回收的效率低：
-1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
-2. 只要该类对象还有被引用，就不能被回收
-
----
+### 设置 Metaspace / Method Aread 的大小
 
 [**设置 Metaspace / Method Aread 的大小**](https://www.cnblogs.com/ruoli-0/p/14275977.html[)
 
@@ -168,6 +173,15 @@ Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspa
 - 如果 `-XX:MetaspaceSize` 设置的过低，触发了多次 FullGC，那么应该将其设置为更高的值
 
 如果 Metaspace 发生溢出，JVM 会抛出异常`OutOfMemoryError:Metaspace` 
+
+### 草稿
+
+作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
+
+GC 垃圾回收的效率低：
+
+1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
+2. 只要该类对象还有被引用，就不能被回收
 
 
 
@@ -198,7 +212,7 @@ Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspa
 
 > 详细请看 GC 部分的
 
-# 线程独占部分 / 线程私有 / Thread Safety
+# 线程独占部分
 
 **Some Runtime Data Areas are unique to individual threads**
 
@@ -206,7 +220,7 @@ Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspa
 
 - 每个线程都有独立空间
 - 生命周期等于线程的生命周期
-- 线程私有 = **线程安全 Thread Safety** （Thread-safe / スレッドセーフ）
+- 线程独占 = 线程私有 = **线程安全 Thread Safety** （Thread-safe / スレッドセーフ）
 
 As each new thread comes into existence, it gets its own *pc register* (program counter) and *Java stack*.
 
@@ -224,6 +238,8 @@ Stack frames for currently executing methods are shown in a lighter shade. For t
 
 ## 虚拟机栈 Java Virtual Machine Stacks
 
+### JVM Stack 基础
+
 **Java Virtual Machine Stacks・仮想マシン・スタック**
 
 A thread's **Java stack stores the state of Java (not native) method invocations for the thread** . 
@@ -240,7 +256,7 @@ JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
 
 也就是说，**只要 Thread 开始运行，JVM 就会分配一个专属的内存空间给该 Thread。在 Thread 上运行的 Method 所需要的 Local Variables 及其他 Thread 相关的数据，也会被存在该内存空间中。该内存空间就是 Stack(s)。**
 
----
+### Stack Frame 栈帧
 
 [Stack Frames](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6)
 
@@ -274,6 +290,8 @@ Note that a stack frame created by a thread is <u>local to that thread</u> and <
 
 ---
 
+### Local Variable Array / Local Variables 局部变量
+
 [Local Variables](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.1)
 
 Each Stack Frame contains an array of variables known as its **Local Variables** .
@@ -294,7 +312,24 @@ Local Variable 可以存储：
 - On instance method invocation, local variable *0* is always used to pass a reference to the object on which the instance method is being invoked (`this` in the Java programming language). 
 - Any parameters are subsequently passed in consecutive local variables starting from local variable *1*.
 
----
+在下面的代码中：
+
+```java
+public class Test {
+    public static void main(String[] args) {
+        Teacher teacher = new Teacher();
+    }
+}
+
+class Teacher {
+}
+```
+
+执行  `main` 方法的 Stack Frame，会有一个 `teacher` 的 Local Variable，该 Local Variable 会存储一个内存地址。该内存地址，就是 `new` 出来的 `Teacher` 对象在 Heap 中的位置。
+
+也就是说， **JVM Stack 中的 Stack Frame 里面的 Local Variable，存放的是指向 Heap 中的 Object 的内存地址**
+
+### Operand Stack 操作数栈
 
 [Operand Stack](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.2)
 
@@ -323,7 +358,7 @@ Each entry on the operand stack can <u>hold a value of any JVM type</u>, includi
 
 At any point in time, an operand stack has an associated depth, where a value of type `long` or `double` contributes two units to the depth and a value of any other type contributes one unit.
 
----
+### Dynamic Linking 动态引用
 
 [Dynamic Linking](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.3)
 
@@ -333,7 +368,7 @@ The `class` file code for a method refers to methods to be invoked and variables
 
 This late binding of the methods and variables makes changes in other classes that a method uses less likely to break this code.
 
----
+### 摘抄和草稿
 
 摘抄：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
 
@@ -456,6 +491,8 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 存放 JVM 底层的 C 和 C++ 等语言实现的 Java 方法。
 
+这些 native 方法也需要内存空间，所以在调用到这些方法的时候，JVM 也会腾出一块 Native Method Stack 给这些方法。
+
 > [Not all JVMs support native methods, however, those that do typically create a per thread native method stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
 
 > [本地方法栈(Native Method Stack)和Java虚拟机栈类似，区别在于Java虚拟机栈是为了Java方法服务的，而本地方法栈是为了native方法服务的。在虚拟机规范中并没有对本地方法实现所采用的编程语言与数据结构采取强制规定，因此不同的JVM虚拟机可以自己实现自己的native方法。](https://app.yinxiang.com/shard/s72/nl/16998849/74009fbe-a516-41e2-8920-f48cc4593957/)
@@ -484,16 +521,6 @@ Stack 存放的内容和程序运行相关，主要存储函数运行过程中�
 * 线程结束的时候，栈内存也就释放了（注意，main 也是一个进程）
 * 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
 * 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
-
-***
-
-
-
-
-
-
-
-
 
 # 知识点
 
