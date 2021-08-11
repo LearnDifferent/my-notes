@@ -129,7 +129,7 @@ GC 垃圾回收的效率低：
 
 ---
 
-[**设置 Metaspace / Method Aread 的大小**](https://zhuanlan.zhihu.com/p/344537168)
+[**设置 Metaspace / Method Aread 的大小**](https://www.cnblogs.com/ruoli-0/p/14275977.html[)
 
 **JDK7及以前**
 
@@ -137,7 +137,7 @@ GC 垃圾回收的效率低：
 - `-XX:MaxPermsize` 来设定永久代最大可分配空间。32 位机器默认是 64M，64 位机是 82M。
 - 当 JVM 加载的类信息容量超过了这个值，会报异常 OutofMemoryError:PermGen space。
 
-![img](https://pic3.zhimg.com/80/v2-ca20cf7bc38fda111f4b194a199fc6ea_1440w.jpg)
+![img](https://img2020.cnblogs.com/blog/2123988/202101/2123988-20210114111828173-264799550.png)
 
 **JDK8以后**
 
@@ -361,7 +361,7 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 - `aload_1` 就是需要运行的字节码指令
 - 「字节码指令」对应的是：「指令方法」在方法区内的「Memory Address（内存地址）」
 
-[PC Register 为什么存放的不是「指令本身」而是「指令的存放地址」？](程序计数器为什么存放的不是指令本身而是指令的存放地址。？ - 花泽小鱼干的回答 - 知乎 https://www.zhihu.com/question/318129637/answer/637300541)
+[PC Register 为什么存放的不是「指令本身」而是「指令的存放地址」？](https://www.zhihu.com/question/318129637/answer/637300541)
 
 - 因为除了程序计数器（PC, PC Register）外还有个指令寄存器（IR, Instruction Register）
 - IR 是存放当前执行指令的，而 PC 指向的是下条执行指令的地址
