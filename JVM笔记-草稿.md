@@ -108,6 +108,7 @@ Runtime Constant Pool:
 - Each class file has a **constant pool** , and each class or interface loaded by the JVM has an internal version of its constant pool called the **Runtime Constant Pool** .
 - The **Runtime Constant Pool** is an implementation-specific data structure that <u>maps to the constant pool in the class file</u>.
 - Thus, after a Type is initially loaded, <u>all the symbolic references from the Type will reside in the type's Runtime Constant Pool</u>.
+- [When creating a class or interface, if the construction of the run-time constant pool requires more memory than can be made available in the method area of the Java Virtual Machine, the Java Virtual Machine throws an `OutOfMemoryError`.](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.5)
 
 ---
 
@@ -223,6 +224,8 @@ Stack frames for currently executing methods are shown in a lighter shade. For t
 
 ## 虚拟机栈 Java Virtual Machine Stacks
 
+**Java Virtual Machine Stacks・仮想マシン・スタック**
+
 A thread's **Java stack stores the state of Java (not native) method invocations for the thread** . 
 
 The <u>state of a Java method invocation</u> includes its **local variables, the parameters with which it was invoked, its return value (if any), and intermediate calculations** .
@@ -239,23 +242,102 @@ JVM Stacks，可以理解简单理解为“线程栈”（Thread Stacks）：
 
 ---
 
+[Stack Frames](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6)
+
 The Java stack is composed of **stack frames** (or *frames*). 
 
-**A stack frame contains the state of one Java method invocation** :
+**A stack frame is used to store data and partial results, as well as to perform dynamic linking, return values for methods, and dispatch exceptions.**
+
+Stack frames are allocated from the [Java Virtual Machine stack](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.2) of the thread creating the frame. A stack frame contains the state of one Java method invocation:
 
 - When a thread invokes a method, the JVM pushes a new frame onto that thread's Java stack
-- When the method completes, the VM pops and discards the frame for that method
+- When the method completes, the VM pops and discards the frame for that method, whether that completion is normal or abrupt (it throws an uncaught exception)
+
+Each stack frames has its own array of [local variables](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.1) , its own [operand stack](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.2), and a [reference to the run-time constant pool](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.5.5) of the class of the current method. 
+
+> A stack frame may be extended with additional implementation-specific information, such as debugging information.（展示异常错误信息的时候，可以使用 JVM 的栈）
+
+The **sizes** of the **local variable array** and the **operand stack** are <u>determined at compile-time</u> and are <u>supplied along with the code for the method associated with the stack frame</u>. 
+
+Thus **the size of the stack frame data structure** depends only on <u>the implementation of the JVM</u>, and **the memory for these structures** can be <u>allocated simultaneously on method invocation</u>.
+
+Current Frame :
+
+- Only one frame, **the stack frame for the executing method**, is <u>active at any point in a given thread of control</u>.
+- This frame is referred to as the **current frame** , and its method is known as the **current method** . The class in which the current method is defined is the **current class** . 
+- <u>Operations on local variables and the operand stack</u> are typically with <u>reference to the current frame</u>.
+- A frame **ceases to be current** if <u>its method invokes another method</u> or if <u>its method completes</u>.
+- **When a method is invoked, a new frame is created and becomes current when control transfers to the new method** .
+- **On method return, the current frame passes back the result of its method invocation, if any, to the previous frame. The current frame is then discarded as the previous frame becomes the current one.**
+
+Note that a stack frame created by a thread is <u>local to that thread</u> and <u>cannot be referenced by any other thread</u>.
 
 ---
 
-Operand Stack（操作数栈）
+[Local Variables](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.1)
+
+Each Stack Frame contains an array of variables known as its **Local Variables** .
+
+The length of the local variable array of a frame is determined at compile-time and supplied in the binary representation of a class or interface along with the code for the method associated with the frame.
+
+Local Variable 可以存储：
+
+- A **single local variable** can hold a value of type `boolean`, `byte`, `char`, `short`, `int`, `float`, `reference`, or `returnAddress`. 
+- A **pair of local variables** can hold a value of type `long` or `double`. 
+- Note: A value of type `long` or type `double` <u>occupie two consecutive</u> local variables.
+
+**Local Variables 是以 Array（数组 / 配列）的形式存在的，所以也被称为 Local Variable Array (LVA)** ：Local variables are addressed by indexing. The index of the first local variable is zero. An integer is considered to be an index into the local variable array if and only if that integer is between zero and one less than the size of the local variable array.
+
+**The JVM uses local variables to pass parameters on method invocation** : 
+
+- On class method invocation, any parameters are passed in consecutive local variables starting from local variable *0*. 
+- On instance method invocation, local variable *0* is always used to pass a reference to the object on which the instance method is being invoked (`this` in the Java programming language). 
+- Any parameters are subsequently passed in consecutive local variables starting from local variable *1*.
+
+---
+
+[Operand Stack](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.2)
+
+操作数栈：
 
 * 定义：临时存放并操作 value（数值）的内存空间
 * 存放 value：JVM 先把某个 value 放入 Operand Stack 中
 * 操作 value：如果需要赋值某个 Local Variable，就将之前存入的 value 该 Local Variable 中
 * 操作 value：如果需要计算，Operand Stack 就会弹出最近的 2 个 value，然后根据加减乘除对这 2 个 value 进行运算操作，得到结束后重新押回 Operand Stack 中
 
-Java Virtual Machine Stacks・仮想マシン・スタック
+Each frame contains a last-in-first-out (LIFO) stack known as its **operand stack** . The maximum depth of the operand stack of a frame is determined at compile-time and is supplied along with the code for the method associated with the frame.
+
+> Where it is clear by context, we will sometimes refer to the operand stack of the current frame as simply the operand stack.
+
+The operand stack is <u>empty when the frame that contains it is created</u>. 
+
+**JVM supplies instructions to load constants or values from local variables or fields onto the operand stack. Other JVM instructions take operands from the operand stack, operate on them, and push the result back onto the operand stack. The operand stack is also used to prepare parameters to be passed to methods and to receive method results.**
+
+> For example, the [*iadd*](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.iadd) instruction adds two `int` values together. It requires that the `int` values to be added be the top two values of the operand stack, pushed there by previous instructions. Both of the `int` values are popped from the operand stack. They are added, and their sum is pushed back onto the operand stack. Subcomputations may be nested on the operand stack, resulting in values that can be used by the encompassing computation.
+
+Each entry on the operand stack can <u>hold a value of any JVM type</u>, including a value of type `long` or type `double`.
+
+**Values from the operand stack must be operated upon in ways appropriate to their types** . It is not possible, for example, to push two `int` values and subsequently treat them as a `long` or to push two `float` values and subsequently add them with an [*iadd*](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.iadd) instruction. 
+
+> A small number of JVM instructions (the [*dup*](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.dup) instructions and [*swap*](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-6.html#jvms-6.5.swap)) operate on run-time data areas as raw values without regard to their specific types; these instructions are defined in such a way that they cannot be used to modify or break up individual values. These restrictions on operand stack manipulation are enforced through `class` file verification.
+
+At any point in time, an operand stack has an associated depth, where a value of type `long` or `double` contributes two units to the depth and a value of any other type contributes one unit.
+
+---
+
+[Dynamic Linking](https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-2.html#jvms-2.6.3)
+
+<u>Each Stack Frame contains a reference to the run-time constant pool for the type of the current method to support **dynamic linking** of the method code</u>. 
+
+The `class` file code for a method refers to methods to be invoked and variables to be accessed via symbolic references. **Dynamic linking translates these symbolic method references into concrete method references** , loading classes as necessary to resolve as-yet-undefined symbols, and translates variable accesses into appropriate offsets in storage structures associated with the run-time location of these variables.
+
+This late binding of the methods and variables makes changes in other classes that a method uses less likely to break this code.
+
+---
+
+摘抄：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
+
+Java Virtual Machine Stacks・
 
 > For every thread, JVM creates a separate stack at the time of thread creation. The memory for a Java Virtual Machine stack does not need to be contiguous. The Java virtual machine only performs two operations directly on Java Stacks: it pushes and pops frames. And stack for a particular thread may be termed as *Run – Time Stack*.
 >
@@ -285,27 +367,11 @@ Stack Frame Structure
     * It contains all symbolic reference (constant pool resolution) and normal method return related to that particular method.
     * It also contains a reference to Exception table which provide the corresponding catch block information in the case of exceptions.
 
-参考资料：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
-
 ***
 
-下面的待整理，不知道是对还是错
+下面的是草稿，等待整理……
 
-栈帧结构
-
-方法索引（method index）
-
-输入输出参数（Parameters）
-
-本地变量（Local vars）
-
-类（Class）
-
-父帧（Return Frame）
-
-子帧（Next Frame）
-
-***
+一些名词：栈帧结构、方法索引（method index）、输入输出参数（Parameters）、本地变量（Local vars）、类（Class）、父帧（Return Frame）、子帧（Next Frame）
 
 > 栈分为<u>栈顶</u>和<u>栈底</u>，每一个栈压住的程序正在执行的方法。
 
