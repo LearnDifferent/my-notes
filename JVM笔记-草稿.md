@@ -230,6 +230,7 @@ Object 在 Heap 中的生命周期：
 
 - [Do Not Set -XX:MaxTenuringThreshold to a Value Greater Than 15 (Doc ID 1283267.1)](https://support.oracle.com/knowledge/Middleware/1283267_1.html)
 - [MaxTenuringThreshold - how exactly it works?](https://stackoverflow.com/a/13549337)
+- [Execution Engine In Java](https://www.geeksforgeeks.org/execution-engine-in-java/) 或在 [GitHub上](https://github.com/LearnDifferent/my-notes/blob/full/ExecutionEngineInJava.md) 查看
 
 ### OOM
 
@@ -264,7 +265,6 @@ public class ObjectTest {
 ### 草稿
 
 > 栈主要管运行，堆主要管存储对象
->
 
 * **Heap** 主要**存储对象**
 * **Stack** 存储的主要是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
@@ -574,9 +574,82 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 # JVM 指令与工具
 
+> 这里使用的是 JDK 11，相关内容可以查看 [Oracle 官方工具文档](https://docs.oracle.com/en/java/javase/11/tools/index.html) ，下文主要涉及的是 [Monitoring Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/monitoring-tools-and-commands.html)
+
+## 基础的指令
+
+查看当前 Java 进程的 pid：
+
+```bash
+jps
+```
+
+监视和管理控制台（图形化界面）：
+
+```bash
+jconsole
+```
+
+查看线程：
+
+```bash
+jstack $pid
+```
 
 
-参考资料：[【java】jvm指令与工具jstat/jstack/jmap/jconsole/jps/visualVM](https://www.bilibili.com/video/BV1QJ411P78Q)
+
+
+
+## jstat
+
+打印某个 pid 进程的信息（百分比模式），可以设置打印的 interval（间隔时间，单位是毫秒）：
+
+```bash
+jstat -gcutil $pid $interval
+```
+
+比如，间隔 1000 毫秒，打印 pid 为 995 的 Java 进程的信息：
+
+```bash
+jstat -gcutil 995 1000
+```
+
+上面的命令 ，可能会每隔 1000 豪秒就打印一次的如下信息（部分截取）：
+
+```
+  S0     S1     E      O      M     CCS    YGC     YGCT    FGC    FGCT    CGC    CGCT     GCT   
+  0.00 100.00  57.58  11.06  96.30  90.84      3    0.029     0    0.000     2    0.003    0.032
+  0.00 100.00  57.58  11.06  96.30  90.84      3    0.029     0    0.000     2    0.003    0.032
+  0.00 100.00  57.58  11.06  96.30  90.84      3    0.029     0    0.000     2    0.003    0.032
+  0.00 100.00  57.58  11.06  96.30  90.84      3    0.029     0    0.000     2    0.003    0.032
+```
+
+其中的 Column 及其 Description：
+
+- `S0`: Survivor space 0 utilization as a percentage of the space's current capacity.
+- `S1`: Survivor space 1 utilization as a percentage of the space's current capacity.
+- `E`: Eden space utilization as a percentage of the space's current capacity.
+- `O`: Old space utilization as a percentage of the space's current capacity.
+- `M`: Metaspace utilization as a percentage of the space's current capacity.
+- `CCS`: Compressed class space utilization as a percentage.
+- `YGC`: Number of young generation GC events. (Young GC = Minor GC)
+- `YGCT`: Young generation garbage collection time.
+- `FGC`: Number of full GC events.
+- `FGCT`: Full garbage collection time.
+- `GCT`: Total garbage collection time.
+
+上面使用的是 `-gcutil` 参数，主要显示的是百分比。还可以：
+
+- `-gc` 具体的值
+- `-gcnew` New generation statistics
+- `-gcold` Old generation size statistics
+- 其他参数可以参考 [官方文档](https://docs.oracle.com/en/java/javase/11/tools/jstat.html#GUID-5F72A7F9-5D5A-4486-8201-E1D1BA8ACCB5)
+
+参考资料：
+
+- [Oracle - JDK 11 - 官方工具文档](https://docs.oracle.com/en/java/javase/11/tools/index.html)
+- [【java】jvm指令与工具jstat/jstack/jmap/jconsole/jps/visualVM](https://www.bilibili.com/video/BV1QJ411P78Q)
+- [A Guide to Java Profilers](https://www.baeldung.com/java-profilers)
 
 # 对比 JVM Stack 和 Heap
 
