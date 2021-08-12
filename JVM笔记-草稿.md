@@ -187,9 +187,84 @@ GC 垃圾回收的效率低：
 
 ## 堆内存 Heap
 
-> 栈主要管运行，堆主要管存储
+### Heap 基础
+
+Heap 分为：
+
+- Young Generation（年轻代）：占据 Heap 的 1/3，且 Young Generation 还可以分为：
+	- Eden：默认占据 Young Generation 的 8/10
+	- Survivor 0：缩写为 S0
+		- 可以是 from，也可以是 to
+		- 默认占据 Young Generation 的 1/10
+	- Survivor 1：缩写 S1，其余同上
+- Old Generation（老年代）：占据 Heap 的 2/3
+
+Object 在 Heap 中的生命周期：
+
+1. 当 `new` 一个 Object 出来的时候，这个 Object 优先 be allocated in Eden
+
+2. 当 Eden 放不下后，[Execution Engine](https://www.geeksforgeeks.org/execution-engine-in-java/)（JVM 字节码执行引擎）会在后台开启一个 MinorGC 垃圾收集线程，来清理整个 Young Generation
+
+3. 在 Minor GC 过后依旧存留的 Object，就会放到当前的 Survivor（to）中
+
+	- 在 Object 被放到当前的 Survivor（to）后，当前的 Survivor（to）就变为了 Survivor（from）
+
+	- 同时，之前的 Survivor（from）就变为了 Survivor（to）
+
+	- 只要记住，「to」是空的。只要存放了 Object 后，「to」就会变为「from」
+
+4. 在 Survivor Space 中的 Object，每经历一次 Minor GC 后如果存活了下来，就会从「from」转移到「to」，且该 Object 的 **age** 就会 increase 1
+
+	- 简单来说，age (分代年龄) means number of collection survived
+	- age 存储在 Object Header 中
+
+5. If the **age** is above the current **tenuring threshold** , it would <u>gets tenured into (be promoted to) Old Generation</u>
+
+	- tenuring threshold 的参数是 `-XX:MaxTenuringThreshold` ，默认值为 15
+
+	- The Java command line parameter `-XX:MaxTenuringThreshold` specifies for how many minor GC cycles an object will stay in the survivor spaces until it finally gets tenured into the old space.
+
+6. The Object could also be promoted to the Old Generation directly if the Survivor Space gets full (overflow)
+
+参考资料：
+
+- [Do Not Set -XX:MaxTenuringThreshold to a Value Greater Than 15 (Doc ID 1283267.1)](https://support.oracle.com/knowledge/Middleware/1283267_1.html)
+- [MaxTenuringThreshold - how exactly it works?](https://stackoverflow.com/a/13549337)
+
+### OOM
+
+```java
+public class ObjectTest {
+
+    public static void main(String[] args) {
+
+        List<ObjectTest> list = new ArrayList<>();
+
+        while (true) {
+            list.add(new ObjectTest());
+            System.out.println(list.size());
+        }
+    }
+}
+```
+
+在上面的代码中：
+
+- `List<ObjectTest> list = new ArrayList<>();` 表示 <u>`list` (local variable)</u> 引用了 <u>`ArrayList` (对象)</u>
+- `list.add(new ObjectTest());` 表示 <u>`ArrayList` (局部变量 list 实际指向的 ArrayList 对象)</u> 引用了 <u>`ObjectTest` (对象)</u>
+
+这样的话，所有 `list` 中的 `ObjectTest` 对象就永远都无法被 GC 回收：
+
+- `list` 是当前的 GC Root，而 `list` 引用了 `ArrayList`，`ArrayList` 又引用了 `ObjectTest` 
+
+- 也就是说，每次 `new` 出来的 `ObjectTest` 会被 `ArrayList` 引用，而 `ArrayList` 又会被 `list` （也就是 GC Root）引用，所以无法回收
+
+
+
+### 草稿
+
+> 栈主要管运行，堆主要管存储对象
 >
-> 主要存储对象
 
 * **Heap** 主要**存储对象**
 * **Stack** 存储的主要是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
@@ -496,6 +571,12 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 > [Not all JVMs support native methods, however, those that do typically create a per thread native method stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
 
 > [本地方法栈(Native Method Stack)和Java虚拟机栈类似，区别在于Java虚拟机栈是为了Java方法服务的，而本地方法栈是为了native方法服务的。在虚拟机规范中并没有对本地方法实现所采用的编程语言与数据结构采取强制规定，因此不同的JVM虚拟机可以自己实现自己的native方法。](https://app.yinxiang.com/shard/s72/nl/16998849/74009fbe-a516-41e2-8920-f48cc4593957/)
+
+# JVM 指令与工具
+
+
+
+参考资料：[【java】jvm指令与工具jstat/jstack/jmap/jconsole/jps/visualVM](https://www.bilibili.com/video/BV1QJ411P78Q)
 
 # 对比 JVM Stack 和 Heap
 
