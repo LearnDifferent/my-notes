@@ -574,9 +574,7 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 # JVM 指令与工具
 
-> 这里使用的是 JDK 11，相关内容可以查看 [Oracle 官方工具文档](https://docs.oracle.com/en/java/javase/11/tools/index.html) ，下文主要涉及的是 [Monitoring Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/monitoring-tools-and-commands.html)
-
-## 基础的指令
+> 这里使用的是 JDK 11，相关内容可以查看 [Oracle 官方工具文档](https://docs.oracle.com/en/java/javase/11/tools/index.html) ，下文主要涉及官方文档中的 [Monitoring Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/monitoring-tools-and-commands.html) 和 [Troubleshooting Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/troubleshooting-tools-and-commands.html)
 
 查看当前 Java 进程的 pid：
 
@@ -590,17 +588,32 @@ jps
 jconsole
 ```
 
-查看线程：
+查看某个 pid 的线程状况：
 
 ```bash
 jstack $pid
 ```
 
+---
 
+将某个 pid 的 Heap 信息，另存为一个自定义 filename 的文件：
 
+```bash
+jmap -dump:file=$filename $pid
+```
 
+这个 dump 出来的文件，需要其他工具来查看。具体的工具，可以查看：[A Guide to Java Profilers](https://www.baeldung.com/java-profilers)
 
-## jstat
+如果想 output the contents on the console（在控制台直接输出结果），可以使用：
+
+```bash
+jmap -histo $pid # 输出该进程的 Heap 信息
+jmap -histo:live $pid # count only live objects
+```
+
+更多 `jmap` 相关，可以查看 [官方文档](https://docs.oracle.com/en/java/javase/11/tools/jmap.html#GUID-D2340719-82BA-4077-B0F3-2803269B7F41)
+
+---
 
 打印某个 pid 进程的信息（百分比模式），可以设置打印的 interval（间隔时间，单位是毫秒）：
 
