@@ -185,9 +185,11 @@ GC 垃圾回收的效率低：
 
 
 
-## 堆内存 Heap
+## 堆内存 Java Heap
 
 ### Heap 基础
+
+The Java heap is where the objects of a Java program live. It is a repository for live objects, dead objects, and free memory
 
 Heap 分为：
 
@@ -202,9 +204,7 @@ Heap 分为：
 Object 在 Heap 中的生命周期：
 
 1. 当 `new` 一个 Object 出来的时候，这个 Object 优先 be allocated in Eden
-
-2. 当 Eden 放不下后，[Execution Engine](https://www.geeksforgeeks.org/execution-engine-in-java/)（JVM 字节码执行引擎）会在后台开启一个 MinorGC 垃圾收集线程，来清理整个 Young Generation
-
+2. 当 Eden 放不下后，[Execution Engine](https://www.geeksforgeeks.org/execution-engine-in-java/)（JVM 字节码执行引擎）会开启一个 MinorGC 垃圾收集线程，来清理整个 Young Generation
 3. 在 Minor GC 过后依旧存留的 Object，就会放到当前的 Survivor（to）中
 
 	- 在 Object 被放到当前的 Survivor（to）后，当前的 Survivor（to）就变为了 Survivor（from）
@@ -212,25 +212,24 @@ Object 在 Heap 中的生命周期：
 	- 同时，之前的 Survivor（from）就变为了 Survivor（to）
 
 	- 只要记住，「to」是空的。只要存放了 Object 后，「to」就会变为「from」
-
 4. 在 Survivor Space 中的 Object，每经历一次 Minor GC 后如果存活了下来，就会从「from」转移到「to」，且该 Object 的 **age** 就会 increase 1
 
 	- 简单来说，age (分代年龄) means number of collection survived
 	- age 存储在 Object Header 中
-
 5. If the **age** is above the current **tenuring threshold** , it would <u>gets tenured into (be promoted to) Old Generation</u>
 
 	- tenuring threshold 的参数是 `-XX:MaxTenuringThreshold` ，默认值为 15
 
 	- The Java command line parameter `-XX:MaxTenuringThreshold` specifies for how many minor GC cycles an object will stay in the survivor spaces until it finally gets tenured into the old space.
-
-6. The Object could also be promoted to the Old Generation directly if the Survivor Space gets full (overflow)
+6. The Object could also be promoted to the Old Gen directly if the Survivor Space gets full (overflow)
+7. 当 Old Gen 放满了之后，还要继续放 Object 的话，Execution Engine 就会开启一个 Full GC 的线程，对整个 Heap 进行垃圾回收处理
+8. 如果 Old Gen 在进行了 Full GC 后还是满的，此时又有新的 Object 要放入 Old Gen 中，就会触发 `Out Of Memory Error`
 
 参考资料：
 
 - [Do Not Set -XX:MaxTenuringThreshold to a Value Greater Than 15 (Doc ID 1283267.1)](https://support.oracle.com/knowledge/Middleware/1283267_1.html)
 - [MaxTenuringThreshold - how exactly it works?](https://stackoverflow.com/a/13549337)
-- [Execution Engine In Java](https://www.geeksforgeeks.org/execution-engine-in-java/) 或在 [GitHub上](https://github.com/LearnDifferent/my-notes/blob/full/ExecutionEngineInJava.md) 查看
+- [Execution Engine In Java](https://www.geeksforgeeks.org/execution-engine-in-java/) 或 [在 GitHub上查看](https://github.com/LearnDifferent/my-notes/blob/full/ExecutionEngineInJava.md)
 
 ### OOM
 
@@ -576,7 +575,38 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 > [本地方法栈(Native Method Stack)和Java虚拟机栈类似，区别在于Java虚拟机栈是为了Java方法服务的，而本地方法栈是为了native方法服务的。在虚拟机规范中并没有对本地方法实现所采用的编程语言与数据结构采取强制规定，因此不同的JVM虚拟机可以自己实现自己的native方法。](https://app.yinxiang.com/shard/s72/nl/16998849/74009fbe-a516-41e2-8920-f48cc4593957/)
 
-# JVM 指令与工具
+
+
+# JVM Performance Tuning：Java 虚拟机调优
+
+## JVM 调优目标：减少 STW
+
+**JVM Performance Tuning 的目的是减少 GC**，特别是减少 Full GC（Often a Full GC (Major GC) is much slower because it involves all live objects）
+
+**为什么要减少 GC？因为 GC 会 Stop-The-World** ：
+
+- *Stop-The-World* also known as *STW*, *Stop the World Event*, *Stop-The-World Pause*, *STW Pause*
+- **All application threads are stopped until the operation (GC) completes**
+- 这也就造成了 GC Pause（Garbage Collection Pause）
+
+为什么要使用 STW（Stop-The-World）机制？
+
+如果在 GC 没结束前，正在运行的 Threads 就已经结束了，那么 Stack 占用的空间就会被释放掉，与此同时，Stack 存储的 Local Variables 也就被销毁掉了。
+
+如果没有 STW 机制，那么在 Threads 还没结束前，就被 GC 标记为 Garbage 的 Object 实际上就为 `null` 了。这样的话，GC 需要回收的 Object 为 `null` ，就要重新再找一次，会出现问题。（更多 STW 相关，可以参考 [另一篇 JVM 笔记](https://github.com/LearnDifferent/my-notes/blob/full/JVM%E7%AC%94%E8%AE%B0-%E6%9E%81%E5%AE%A2%E6%97%B6%E9%97%B4-%E6%B7%B1%E5%85%A5%E6%8B%86%E8%A7%A3Java%E8%99%9A%E6%8B%9F%E6%9C%BA.md)）
+
+所以，需要 STW 来防止 Object 有时候是 Garbage，有时候又不是 Garbage 的情况。
+
+> Garbage（垃圾）：When an object can no longer be reached from any pointer in the running program, it is considered "garbage" and ready for collection
+
+**The goal of tuning your heap size is to minimize the time that your JVM spends doing garbage collection** while maximizing the number of clients that WebLogic Server can handle at a given time. A best practice is to tune the time spent doing garbage collection to within 5% of execution time.
+
+参考资料：
+
+- [Tuning Java Virtual Machines (JVMs)](https://docs.oracle.com/cd/E15523_01/web.1111/e13814/jvm_tuning.htm#PERFM150)
+- [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
+
+## JVM 指令与工具
 
 > 这里使用的是 JDK 11，相关内容可以查看 [Oracle 官方工具文档](https://docs.oracle.com/en/java/javase/11/tools/index.html) ，下文主要涉及官方文档中的 [Monitoring Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/monitoring-tools-and-commands.html) 和 [Troubleshooting Tools and Commands](https://docs.oracle.com/en/java/javase/11/tools/troubleshooting-tools-and-commands.html)
 
