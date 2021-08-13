@@ -234,6 +234,8 @@ Object 在 Heap 中的生命周期：
 
 ### OOM
 
+OOM：`java.lang.OutOfMemoryError: Java heap space`
+
 ```java
 public class ObjectTest {
 
@@ -260,7 +262,9 @@ public class ObjectTest {
 
 - 也就是说，每次 `new` 出来的 `ObjectTest` 会被 `ArrayList` 引用，而 `ArrayList` 又会被 `list` （也就是 GC Root）引用，所以无法回收
 
+> 如果想早点触发 OOM 的话，可以在 IDEA 中添加 VM Option `-Xms2m -Xmx8m` 后再运行。
 
+如果想让这个 Java 程序，在触发 OOM 后，生成一个 Heap 信息，可以继续添加 `-XX:+HeapDumpOnOutOfMemoryError` 参数。当 OOM 后，会生成一个类似 `java_pid1234.hprof` 的文件，可以在 IDEA 双击打开，IDEA 会使用自带的 Profiler 来分析该文件也可以使用其他的工具打开改文件，可以参考[A Guide to Java Profilers](https://www.baeldung.com/java-profilers)。
 
 ### 草稿
 
@@ -664,7 +668,7 @@ jstat -gcutil 995 1000
 - [【java】jvm指令与工具jstat/jstack/jmap/jconsole/jps/visualVM](https://www.bilibili.com/video/BV1QJ411P78Q)
 - [A Guide to Java Profilers](https://www.baeldung.com/java-profilers)
 
-# 对比 JVM Stack 和 Heap
+# 草稿 - 对比 JVM Stack 和 Heap
 
 Stack 主要管运行，Heap 主要管存储。
 
@@ -689,7 +693,7 @@ Stack 存放的内容和程序运行相关，主要存储函数运行过程中�
 * 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
 * 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
 
-# 知识点
+# 草稿 - 知识点
 
 ## JVM 的位置
 
@@ -762,7 +766,7 @@ ClassLoader 的作用：
 2. BEA 的 JRockit
 3. IBM 的 J9 VM
 
-# GC
+# 草稿 - GC
 
 > GC 的作用区域只有方法区和堆
 >
@@ -779,12 +783,12 @@ JDK 8 之前堆内存中分为三个区域：
 - Young Generation Space（新生区）：
 	1. Eden Space（伊甸园区）
 	2. Survivor Space
-    	1. Survivor Space 0
-              	* 可以简写为 S0，中文是：幸存 0 区
-              	* 根据情况，可以叫做 From Survivor Space 或 To Survivor Space
+		1. Survivor Space 0
+			* 可以简写为 S0，中文是：幸存 0 区
+			* 根据情况，可以叫做 From Survivor Space 或 To Survivor Space
     	2. Survivor Space 1
-              	* 可以简写为 S1，中文是：幸存 1 区
-              	* 根据情况，可以叫做 From Survivor Space 或 To
+			* 可以简写为 S1，中文是：幸存 1 区
+			* 根据情况，可以叫做 From Survivor Space 或 To
 - Old Generation Space / Tenured Space（养老区/老年区/老年代）
 - Permanent Generation(non-heap)：永久区/永久存储区，其实不在堆上（JKD 8 后叫元空间）
 
@@ -1014,7 +1018,7 @@ GC 常用算法：
 
 老年代：存活率高，区域大，所以使用标记清除+标记压缩混合实现（调优就在这里）
 
-# JMM / Java memory model
+# 草稿 - JMM / Java memory model
 
 Java 内存模型
 
@@ -1032,7 +1036,9 @@ JMM 是抽象概念，对八种指令的使用，制定了相应规则。
 
 指令重排，原子性问题
 
-# 参考资料
+---
+
+本文的一些参考资料：
 
 - [【狂神说Java】JVM快速入门篇](https://www.bilibili.com/video/BV1iJ411d7jS)
 - [全套JVM视频教程，全网播放超百万的jvm教程（深入理解Java虚拟机）](https://www.bilibili.com/video/BV1DA411G7fR)
