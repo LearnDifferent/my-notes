@@ -201,6 +201,8 @@ Heap 分为：
 	- Survivor 1：缩写 S1，其余同上
 - Old Generation（老年代）：占据 Heap 的 2/3
 
+### Object 在 Heap 中的生命周期
+
 Object 在 Heap 中的生命周期：
 
 1. 当 `new` 一个 Object 出来的时候，这个 Object 优先 be allocated in Eden
@@ -221,9 +223,32 @@ Object 在 Heap 中的生命周期：
 	- tenuring threshold 的参数是 `-XX:MaxTenuringThreshold` ，默认值为 15
 
 	- The Java command line parameter `-XX:MaxTenuringThreshold` specifies for how many minor GC cycles an object will stay in the survivor spaces until it finally gets tenured into the old space.
-6. The Object could also be promoted to the Old Gen directly if the Survivor Space gets full (overflow)
-7. 当 Old Gen 放满了之后，还要继续放 Object 的话，Execution Engine 就会开启一个 Full GC 的线程，对整个 Heap 进行垃圾回收处理
-8. 如果 Old Gen 在进行了 Full GC 后还是满的，此时又有新的 Object 要放入 Old Gen 中，就会触发 `Out Of Memory Error`
+6. 当 Old Gen 放满了之后，还要继续放 Object 的话，Execution Engine 就会开启一个 Full GC 的线程，对整个 Heap 进行垃圾回收处理
+7. 如果 Old Gen 在进行了 Full GC 后还是满的，此时又有新的 Object 要放入 Old Gen 中，就会触发 `Out Of Memory Error`
+
+### Object 在 Heap 中的其他情况
+
+Object 要进入 Old Gen，除了 Object 的 age 超过 `-XX:MaxTenuringThreshold` 的数值外，还有其他情况，比如：
+
+- 当 Object 的 size 超过了 `XX:PretenureSizeThreshold` 设置的大小时，会直接进入 Old Gen
+- The Object could also be promoted to the Old Gen directly if the Survivor Space gets full (overflow)
+
+Premature Tenuring (Premature Promotion) ：
+
+- 也叫 *动态计算晋升年龄阈值* 或 *动态对象年龄判定*  ，因为 the actual <u>tenuring threshold</u> is <u>dynamically adjusted</u> by JVM
+- When the Survivor Space（可能是 S0 也可能是 S1，总之是当前存放 Object 的 "from"） usage has reached target ratio defined by `-XX:TargetSurvivorRatio`  
+	- The Serial collector, uses `-XX:TargetSurvivorRatio=50` as the default
+- 那么此时，在该 Survivor Space ("from") 中的这批 Objects 里面，如果有 Objects **大于等于** 这批 Objects 的<u>特定年龄（age）</u>，就会直接进入 Old Gen：
+	- [age 从小到大的 Objects 占据的空间，如果大于 Survivor（S0 或 S1）的 TargetSurvivorRatio，那么就把大于等于该 age 的 Objects，放入到 Old Gen](https://segmentfault.com/a/1190000039805691)
+	- 如果 <u>年龄 1 + 年龄 2 + 年龄 3 + 年龄 N</u> 的 Objects 加起来的空间，大于 `-XX:TargetSurvivorRatio` 设定的百分比时，<u>年龄 N</u> 和 <u>年龄 N 以上</u> 的 Objects 进入 Old Gen
+	- [如果出现这种情况](https://www.jianshu.com/p/989d3b06a49d)：<u>年龄 1 占用了 33%</u>，<u>年龄 2 的占用了 33%</u>，累加和超过默认的 TargetSurvivorRatio（50%），那么，<u>年龄 2 和年龄 3 的 Objects 都要到 Old Gen</u>
+
+空间分配担保机制：
+
+- 如果在发生 Minor GC 之前，JVM 检查到 <u>Old Gen剩余的可用的连续空间</u> **小于** <u>Young Gen 所有对象（包括 Garbage 对象）的总空间</u>
+- 那么，如果此时 `HandlePromotionFailure=true` ，那么会继续检查 <u>Old Gen 剩余的可用连续空间</u> **是否大于** <u>历次晋升到 Old Gen 的 Object 的平均大小</u>
+- **如果大于** ，则尝试进行一次 Minor GC（这次 Minor GC 可能会触发 Full GC）
+- **如果小于或者 `HandlePromotionFailure=false`** ，则进行一次 Full GC
 
 参考资料：
 
