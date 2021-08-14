@@ -1010,8 +1010,9 @@ Consequently, this will impact the memory layout.
 新生代（Young Generation）：
 
 - Eden 区：A part of the Java object heap where object can be created efficiently
-- Survivor 区 from（大小和 to 相同）
-- Survivor 区 to（大小和 from 相同，但是 to 是空的）
+- Survivor 区：分为 Survivor 0（S0）和 Survivor 1（S1），会动态变为 from 和 to：
+	- Survivor 区 from（大小和 to 相同，用于存放 Object）
+	- Survivor 区 to（大小和 from 相同，但是 to 是空的）
 
 > **survivor space** : A region of the Java object heap used to hold objects. There are usually a pair of survivor spaces, and collection of one is achieved by copying the referenced objects in one survivor space to the other survivor space
 
@@ -1060,8 +1061,8 @@ JVM 的解决方法是为每个司机预先申请多个停车位，并且只允�
 
 JVM 会记录 <u>Survivor 区</u> 中的对象一共被来回复制了几次：
 
-- 如果一个对象被复制次数超过一定数值时（默认次数为 15，参数 `-XX:+MaxTenuringThreshold` ），那么该对象将被晋升（promote）至老年代（Old Generation）
-- 如果 <u>单个Survivor 区</u> 已经被占用了 50%（参数 `-XX:TargetSurvivorRatio` ），那么较高复制次数的对象也会被晋升至老年代（Old Generation）
+- 如果一个对象被复制次数超过一定数值的 age 时（默认次数为 15，参数 `-XX:+MaxTenuringThreshold` ），那么该对象将被晋升（promote）至老年代（Old Generation）
+- 如果 <u>单个Survivor 区</u>（S0 或 S1 中已经存储了 Object 的区域）已经被占用了一定的比例（参数 `-XX:TargetSurvivorRatio` ，默认值是 50，表示 50%），那么：age 从小到大的对象占据的空间，如果大于单个 Survivor 区域的一半（默认是一半），就把等于或大于该 age 的对象，晋升至老年代（Old Generation）
 
 也就是说， **当发生 Minor GC 时，会使用「标记 - 复制算法」，将 Survivor 区中老的存活对象晋升到老年代（Old Generation），然后将剩下的存活对象和 Eden 区的存活对象复制到另一个 Survivor 区中**
 
@@ -1176,7 +1177,7 @@ GC Roots 包括（但不限于）如下几种：
 
 ## Stop-the-world 以及安全点
 
->为了防止在标记过程中堆栈的状态发生改变，JVM 采取安全点机制来实现 Stop-the-world操作，暂停其他非垃圾回收线程
+>为了防止在标记过程中堆栈的状态发生改变，JVM 采取安全点机制来实现 Stop-the-world 操作，暂停其他非垃圾回收线程
 
 虽然可达性分析的算法本身很简明，但是在实践中还是有不少其他问题需要解决的。
 
@@ -1701,6 +1702,8 @@ Revocation can be implemented in various ways - signals, suspension, and safepoi
 此时，JVM 会撤销该<u>类</u>所有 Instance（实例）的 Bias Lock，并且在之后的加锁过程中，直接为该<u>类</u>的 Instance 设置 Lightweight Lock
 
 参考资料：[Biased Locking in HotSpot](https://blogs.oracle.com/dave/biased-locking-in-hotspot)
+
+---
 
 待补充：
 
