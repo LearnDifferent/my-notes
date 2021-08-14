@@ -604,6 +604,28 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 # JVM Performance Tuning：Java 虚拟机调优
 
+## Garbage Collection Basics
+
+Automatic Garbage Collection: 
+
+- Automatic garbage collection is the process of looking at heap memory, identifying which objects are in use and which are not, and deleting the unused objects
+- An in use object, or a referenced object, means that some part of your program still maintains a pointer to that object. 
+- An unused object, or unreferenced object, is no longer referenced by any part of your program. So the memory used by an unreferenced object can be reclaimed
+
+In Java, process of deallocating memory is handled automatically by the garbage collector. The basic process can be described as follows:
+
+- 1: Marking
+	- The first step in the process is called marking. This is where the garbage collector identifies which pieces of memory are in use and which are not
+- 2a: Normal Deletion
+	- Normal deletion removes unreferenced objects leaving referenced objects and pointers to free space.
+- 2b: Deletion with Compacting 
+	- To further improve performance, in addition to deleting unreferenced objects, you can also compact the remaining referenced objects.
+	- By moving referenced object together, this makes new memory allocation much easier and faster
+
+参考资料：
+
+- [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
+
 ## JVM 调优目标：减少 STW
 
 **JVM Performance Tuning 的目的是减少 GC**，特别是减少 Full GC（Often a Full GC (Major GC) is much slower because it involves all live objects）
@@ -630,8 +652,6 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 - [Tuning Java Virtual Machines (JVMs)](https://docs.oracle.com/cd/E15523_01/web.1111/e13814/jvm_tuning.htm#PERFM150)
 - [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
-
-
 
 ## JVM 指令与工具
 
