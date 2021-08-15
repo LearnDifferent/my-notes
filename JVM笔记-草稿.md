@@ -626,6 +626,90 @@ In Java, process of deallocating memory is handled automatically by the garbage 
 
 - [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
 
+## JVM Garbage Collectors
+
+参考资料：[JVM Garbage Collectors](https://www.baeldung.com/jvm-garbage-collectors) 
+
+JVM has these types of GC implementations:
+
+### Serial & ParNew & Serial Old
+
+Serial：
+
+- 关键词：<u>Young Gen</u>，<u>复制算法</u>，<u>STW</u>
+- Serial Collector（串行回收器）是单线程的：The serial collector uses a single thread to perform all garbage collection work, which makes it relatively efficient because there is no communication overhead between threads.
+- It's <u>best-suited to single processor machines</u> and be useful on multiprocessors for applications with small data sets (up to approximately 100 MB). 
+- 开启：`-XX:+UseSerialGC`
+
+ParNew：
+
+- 关键词：<u>Young Gen</u>，<u>复制算法</u>，<u>STW</u>
+- ParNew（并行）是 Serial 的多线程版，可以充分的利用CPU资源，减少回收的时间
+- 开启： `-XX:+UseParNewGC`
+
+Serial Old：
+
+- 关键词：<u>Old Gen</u>，<u>标记-整理算法</u>
+- 配合 Serial / ParNew 使用
+
+### Parallel Scavenge & Parallel Old
+
+Parallel Scavenge：
+
+-  关键词：<u>Young Gen</u>，<u>复制算法</u>
+-  The parallel collector is also known as *throughput collector* 
+	-  [スループット](https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AB%E3%83%BC%E3%83%97%E3%83%83%E3%83%88)（実効伝送速度）は、一般に単位時間当たりの処理能力のこと
+	-  [high throughput](https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tune_app_thruput.html) means that more transactions are executed during a given amount of time. You can also measure the throughput by measuring how long it takes to perform a specific task or calculation.
+	-  Parallel Scavenge 是吞吐量优先的回收器，[虚拟机总共运行了 100 分钟，其中垃圾收集花掉 1 分钟，那吞吐量就是 99%。高吞吐量则可以高效率地利用 CPU 时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务](https://zhuanlan.zhihu.com/p/42500139)
+-  The parallel collector is intended for applications with medium-sized to large-sized data sets that are <u>run on multiprocessor or multithreaded hardware</u>. 
+
+You can enable it by using the `-XX:+UseParallelGC` option.
+
+-  Parallel compaction is a feature that enables the parallel collector to perform major collections in parallel. Without parallel compaction, major collections are performed using a single thread, which can significantly limit scalability. 
+-  Parallel compaction is enabled by default if the option `-XX:+UseParallelGC` has been specified. You can disable it by using the `-XX:-UseParallelOldGC` option.
+-  默认会使用 `-XX:UseAdaptiveSizePolic` 参数，[它动态调整一些 size 参数](https://zhuanlan.zhihu.com/p/149879026)
+
+The numbers of garbage collector threads can be controlled with `-XX:ParallelGCThreads`
+
+The maximum pause time goal (gap [in milliseconds] between two GC) is specified with `-XX:MaxGCPauseMillis`
+
+
+
+The time spent doing garbage collection versus the time spent outside of garbage collection is called the maximum throughput target and can be specified by `-XX:GCTimeRatio`
+
+[关于 `-XX:GCTimeRatio=nnn`](https://docs.oracle.com/javase/7/docs/technotes/guides/vm/gc-ergonomics.html)：
+
+- A hint to the virtual machine that it's desirable that not more than 1 / (1 + nnn) of the application execution time be spent in the collector.
+- For example `-XX:GCTimeRatio=19` sets a goal of 5% of the total time for GC and throughput goal of 95%. That is, the application should get 19 times as much time as the collector.
+- By default the value is 99, meaning the application should get at least 99 times as much time as the collector. That is, the collector should run for not more than 1% of the total time. This was selected as a good choice for server applications. A value that is too high will cause the size of the heap to grow to its maximum.
+
+---
+
+Parallel Old：
+
+- 关键词：<u>Old Gen</u>，<u>多线程-标记整理算法</u>，支持 JDK1.6+
+- Parallel Scavenge 的 Old Gen 版本，和 Parallel Scavenge 绑定使用
+
+### CMS
+
+CMS（Concurrent Mark Sweep）：
+
+- 关键词：<u>Old Gen</u>，<u>标记-清除算法</u>
+- 并发标记清除（CMS，Concurrent Mark Sweep）回收器是一种以获取最短回收停顿时间为目标的回收器
+- 和 ParNew 搭配使用
+- 专注于单次垃圾收集的时间
+
+步骤：
+
+1. 初始标记(CMS-initial-mark)，GC Root 对象，STW 
+2. 并发标记(CMS-concurrent-mark)：并发标记（不会 STW），标记所有 Old 对象 
+3. 重新标记(CMS-remark) ：重新标记，因为并发标记的时候，可能有些对象的引用会发生改变，STW 
+4. 并发清除(CMS-concurrent-sweep)：并发清理（标记清理算法）
+5. 并发重置状态等待下次CMS的触发(CMS-concurrent-reset)，与用户线程同时运行；
+
+开启：`-XX:+UseConcMarkSweepGC`
+
+
 ## JVM 调优目标：减少 STW
 
 **JVM Performance Tuning 的目的是减少 GC**，特别是减少 Full GC（Often a Full GC (Major GC) is much slower because it involves all live objects）
