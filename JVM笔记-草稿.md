@@ -602,7 +602,9 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 
 
-# JVM Performance Tuning：Java 虚拟机调优
+
+
+# Garbage Collection
 
 ## Garbage Collection Basics
 
@@ -707,6 +709,38 @@ Parallel Old：
 - 关键词：<u>Old Gen</u>，<u>多线程</u>，<u>标记整理算法</u>，<u>STW</u>，<u>和 Parallel Scavenge 绑定使用</u>
 - Parallel Scavenge 的 Old Gen 版本，支持 JDK1.6+
 
+### The Mostly Concurrent Collectors: CMS & G1
+
+在学习 CMS 和 G1 之前，要先了解一下 mostly concurrent 的概念。下文摘抄自官方文档 - [7 The Mostly Concurrent Collectors](https://docs.oracle.com/javase/9/gctuning/mostly-concurrent-collectors.htm#JSGCT-GUID-DFA8AF9C-F3BC-4F12-99CE-45AB6F22F15A)。
+
+The mostly concurrent collectors <u>perform parts of their work concurrently to the application</u>, hence their name. The Java HotSpot VM includes two mostly concurrent collectors:
+
+- Concurrent Mark Sweep (CMS) collector: This collector is for applications that prefer shorter garbage collection pauses and can afford to share processor resources with the garbage collection.
+- Garbage-First (G1) garbage collector: This server-style collector is for multiprocessor machines with a large amount of memory. It meets garbage collection pause-time goals with high probability while achieving high throughput.
+
+The mostly concurrent collector <u>trades processor resources</u> (which would otherwise be available to the application) <u>for shorter major collection pause time</u>.
+
+The most visible overhead is the use of one or more processors during the concurrent parts of the collection. On an *N* processor system, the concurrent part of the collection uses *K*/*N* of the available processors, where 1 <= *K* <= ceiling*{N/4*} （取 *N/4* 的上限）.
+
+>[举例来说](https://blog.csdn.net/MGCTEL/article/details/86161220)：
+>
+>N = 16，ceiling{N/4}  = ceiling{16/4} = 4,  占用 1/16 <= K/16 <= 4/16（大于或等于 6.25%，小于或等于 25%）的处理器资源
+>
+>N = 8，ceiling{N/4}  = ceiling{8/4} = 2,  占用 1/8 <= K/8 <= 2/8 的处理器资源
+>
+>N = 4，ceiling{N/4}  = ceiling{4/4} = 1,  占用 1/4 <= K/4 <= 1/4 的处理器资源
+>
+
+In addition to the use of processors during concurrent phases, additional overhead is incurred to enable concurrency. Thus, while garbage collection pauses are typically much shorter with the concurrent collector, application throughput also tends to be slightly lower than with the other collectors.
+
+On a machine with more than one processing core, processors are available for application threads during the concurrent part of the collection, so the concurrent garbage collector thread doesn't pause the application. 
+
+This usually results in shorter pauses, but again fewer processor resources are available to the application and some slowdown should be expected, especially if the application uses all of the processing cores maximally.
+
+As *N* increases, the reduction in processor resources due to concurrent garbage collection becomes smaller, and the benefit from concurrent collection increases. See [Concurrent Mode Failure](https://docs.oracle.com/javase/9/gctuning/concurrent-mark-sweep-cms-collector.htm#GUID-700D5A4A-75EE-4CDC-9A43-5DF8FEBE24DD), which discusses potential limits to such scaling.
+
+Because at least one processor is used for garbage collection during the concurrent phases, the concurrent collectors don't normally provide any benefit on a uniprocessor (single-core) machine.
+
 ### CMS
 
 > The CMS collector is deprecated as of JDK 9. 
@@ -741,8 +775,119 @@ Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 	- 等待下次 CMS 的触发
 	- 可以和其他正在运行的线程同时运行的线程，<u>不会 STW</u>
 
+## Garbage-First Garbage Collector
+
+参考资料：官方文档 - [9 Garbage-First Garbage Collector](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-0394E76A-1A8F-425E-A0D0-B48A3DC82B42)
+
+### G1 Basic
+
+> The G1 (Garbage-First) garbage collector is the default collector, so typically you don't have to perform any additional actions. You can explicitly enable it by providing `-XX:+UseG1GC` on the command line.
+
+G1 is a **generational**, **incremental**, **parallel**, **mostly concurrent**, **stop-the-world**, and **evacuating** garbage collector which **monitors pause-time goals in each of the stop-the-world pauses**.
+
+G1 的 **Space-reclamation** （存储空间回收利用） efforts <u>concentrate on the young generation</u> where it is most efficient to do so, with occasional space-reclamation in the old generation:
+
+- To keep stop-the-world pauses short for space-reclamation, G1 <u>performs space-reclamation incrementally in steps and in parallel</u>.
+
+G1 有 STW 和并发多线程的运作方式：
+
+- <u>Some operations are always performed in stop-the-world pauses to improve throughput</u>. 
+- <u>Other operations</u> that would <u>take more time with the application stopped</u> such as whole-heap operations like *global marking* <u>are performed in parallel and concurrently</u> with the application.
+
+<u>G1 achieves predictability by tracking information about previous application behavior and garbage collection pauses</u> to build a model of the associated costs. It uses this information to size the work done in the pauses. For example, <u>G1 reclaims space in the most efficient areas first</u> (that is the areas that are mostly filled with garbage, therefore the name).
+
+**G1 reclaims space mostly by using evacuation** : 
+
+- Live objects found within selected memory areas to collect are copied into new memory areas, compacting them in the process. 
+- After an evacuation has been completed, the space previously occupied by live objects is reused for allocation by the application.
+
+G1 is <u>not a real-time collector</u>. It tries to meet set pause-time targets with high probability over a longer time, but not always with absolute certainty for a given pause.
 
 
+
+G1 garbage collector is <u>targeted for multiprocessor machines with a large amount of memory</u>.  It attempts to meet garbage collection pause-time goals with high probability while achieving high throughput with little need for configuration. 
+
+G1 aims to provide the best balance between latency and throughput using current target applications and environments whose features include:
+- <u>Heap sizes</u> up to ten of GBs or <u>larger</u>, with <u>more than 50%</u> of the Java heap <u>occupied with live data</u>.
+- Rates of <u>object allocation</u> and <u>promotion</u> that can <u>vary significantly over time</u>（在不同的时间，会有所不同）. 
+- A significant amount of fragmentation in the heap.（Heap 分为大量区域）
+- Predictable pause-time target goals that aren’t longer than a few hundred milliseconds, <u>avoiding long garbage collection pauses</u>.
+
+~~The G1 collector achieves high performance and tries to meet pause-time goals in several ways described in the following sections.~~
+
+### Heap Layout
+
+**G1 partitions the heap into a set of equally sized heap regions, each a contiguous range of virtual memory** as shown in Figure 9-1.
+
+![Figure 9-1 G1 Garbage Collector Heap Layout](https://docs.oracle.com/javase/9/gctuning/img/jsgct_dt_004_grbg_frst_hp.png)
+
+> 上图为：[Figure 9-1 G1 Garbage Collector Heap Layout](https://docs.oracle.com/javase/9/gctuning/img_text/jsgct_dt_004_grbg_frst_hp.htm)
+>
+> Light gray: Empty Regions  
+>
+> Red: Eden Regions  
+>
+> Red with "S": Survivor Regions  
+>
+> Light blue: Old Regions
+>
+> light blue with "H": Old Regions for Humongous Object
+
+**A region is the unit of memory allocation and memory reclamation** :
+
+- At any given time, each of these regions can be empty, or assigned to a particular generation, young or old. 
+- <u>As requests for memory comes in, the memory manager hands out free regions</u>. 
+- <u>The memory manager assigns free regions to a generation and then returns them to the application as free space into which it can allocate itself</u>.
+
+The Young Generation contains Eden regions and Survivor regions. These regions provide the same function as the respective contiguous spaces in other collectors, with the difference that in G1 these regions are typically <u>laid out in a noncontiguous pattern in memory</u>. Old regions make up the old generation. <u>Old generation regions may be **humongous** for objects that span multiple regions</u>.
+
+An application always allocates into a young generation, that is, eden regions, with the exception of humongous, objects that are directly allocated as belonging to the old generation.
+
+G1 garbage collection pauses can reclaim space in the young generation as a whole, and any additional set of old generation regions at any collection pause. 
+
+During the pause G1 copies objects from this *collection set* to one or more different regions in the heap. The destination region for an object depends on the source region of that object: the entire young generation is copied into either survivor or old regions, and objects from old regions to other, different old regions using aging.
+
+### Garbage Collection Cycle
+
+On a high level, the G1 collector alternates between two phases: 
+
+- The **young-only phase** contains garbage collections that <u>fill up the currently available memory with objects in the old generation gradually</u>.
+- The **space-reclamation phase** is where G1 <u>reclaims space in the old generation incrementally</u>, in addition to <u>handling the young generation</u>. 
+- <u>Then the cycle restarts with a young-only phase</u>.
+
+Figure 9-2 gives an overview about this cycle with an example of the sequence of garbage collection pauses that could occur:
+
+![Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/javase/9/gctuning/img/jsgct_dt_001_grbgcltncyl.png)
+
+> 上图为：[Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/javase/9/gctuning/img_text/jsgct_dt_001_grbgcltncyl.htm)
+
+The following list describes **the phases, their pauses and the transition between the phases of the G1 garbage collection cycle** in detail:
+
+1. **Young-only phase**: 
+	- This phase <u>starts with a few young-only collections that promote objects into the old generation</u>. 
+	- The <u>transition between the young-only phase and the space-reclamation phase starts when the old generation occupancy reaches the Initiating Heap Occupancy threshold</u>. At this time, G1 <u>schedules an Initial Mark young-only collection instead of a regular young-only collection</u>.
+	- Initial Mark : 
+		- This type of collection starts the marking process in addition to performing a regular young-only collection. 
+		- Concurrent marking determines all currently reachable (live) objects in the old generation regions to be kept for the following space-reclamation phase. 
+		- While marking hasn’t completely finished, regular young collections may occur. 
+		- Marking finishes with two special stop-the-world pauses: Remark and Cleanup.
+	- Remark: 
+		- This pause finalizes the marking itself, and performs global reference processing and class unloading. 
+		- Between Remark and Cleanup G1 calculates a summary of the liveness information concurrently, which will be finalized and used in the Cleanup pause to update internal data structures.
+	- Cleanup: 
+		- This pause also reclaims completely empty regions, and determines whether a space-reclamation phase will actually follow. 
+		- If a space-reclamation phase follows, the young-only phase completes with a single young-only collection.
+2. **Space-reclamation phase**: 
+	- This phase consists of multiple mixed collections that in addition to young generation regions, also evacuate live objects of sets of old generation regions. 
+	- The space-reclamation phase ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort.
+
+After space-reclamation, the collection cycle restarts with another young-only phase. 
+
+As backup, if the application runs out of memory while gathering liveness information, G1 performs an in-place stop-the-world full heap compaction (Full GC) like other collectors.
+
+
+
+# JVM Performance Tuning：Java 虚拟机调优
 
 ## JVM 调优目标：减少 STW
 
