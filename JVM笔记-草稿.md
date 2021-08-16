@@ -643,7 +643,7 @@ JVM has these types of GC implementations:
 Serial：
 
 - 关键词：<u>Young Gen</u>，<u>单线程</u>，<u>复制算法</u>，<u>STW</u>，<u>配合 Serial Old 使用</u>
-- Serial Collector（串行回收器）是单线程的：The serial collector uses a single thread to perform all garbage collection work, which makes it relatively efficient because there is no communication overhead between threads.
+- The serial collector（串行回收器） uses a single thread to perform all garbage collection work, which makes it relatively efficient because there is no communication overhead between threads.
 - It's <u>best-suited to single processor machines</u> and be useful on multiprocessors for applications with small data sets (up to approximately 100 MB). 
 - 开启：`-XX:+UseSerialGC`
 
@@ -866,26 +866,164 @@ The following list describes **the phases, their pauses and the transition betwe
 1. **Young-only phase**: 
 	- This phase <u>starts with a few young-only collections that promote objects into the old generation</u>. 
 	- The <u>transition between the young-only phase and the space-reclamation phase starts when the old generation occupancy reaches the Initiating Heap Occupancy threshold</u>. At this time, G1 <u>schedules an Initial Mark young-only collection instead of a regular young-only collection</u>.
-	- Initial Mark : 
-		- This type of collection starts the marking process in addition to performing a regular young-only collection. 
-		- Concurrent marking determines all currently reachable (live) objects in the old generation regions to be kept for the following space-reclamation phase. 
-		- While marking hasn’t completely finished, regular young collections may occur. 
-		- Marking finishes with two special stop-the-world pauses: Remark and Cleanup.
-	- Remark: 
-		- This pause finalizes the marking itself, and performs global reference processing and class unloading. 
-		- Between Remark and Cleanup G1 calculates a summary of the liveness information concurrently, which will be finalized and used in the Cleanup pause to update internal data structures.
-	- Cleanup: 
-		- This pause also reclaims completely empty regions, and determines whether a space-reclamation phase will actually follow. 
-		- If a space-reclamation phase follows, the young-only phase completes with a single young-only collection.
+	- *Initial Mark* : 
+		- This type of collection <u>starts the marking process</u> in addition to <u>performing a regular young-only collection</u>. 
+		- **Concurrent marking** determines all currently <u>reachable (live) objects</u> in the <u>old generation regions</u> to be <u>kept for the following space-reclamation</u> phase. 
+		- <u>While marking hasn’t completely finished, regular young collections may occur</u>. 
+		- <u>Marking finishes with two special **stop-the-world** pauses: Remark and Cleanup.</u>
+	- *Remark* (STW): 
+		- This pause <u>finalizes the marking itself</u>, and <u>performs global reference processing and class unloading</u>. 
+		- <u>Between Remark and Cleanup</u> G1 <u>calculates a summary of the liveness information concurrently</u>, which will <u>be finalized and used in the Cleanup pause to update internal data structures</u>.
+	- *Cleanup* (STW): 
+		- This pause also <u>reclaims completely empty regions</u>, and <u>determines whether a space-reclamation phase will actually follow</u>. 
+		- <u>If a space-reclamation phase follows, the young-only phase completes with a single young-only collection</u>.
 2. **Space-reclamation phase**: 
-	- This phase consists of multiple mixed collections that in addition to young generation regions, also evacuate live objects of sets of old generation regions. 
-	- The space-reclamation phase ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort.
+	- This phase <u>consists of multiple mixed collections</u> that in addition to young generation regions, also evacuate live objects of sets of old generation regions. 
+	- The space-reclamation phase <u>ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort</u>.
+3. After space-reclamation, the collection cycle restarts with another young-only phase. 
+4. As backup, <u>if the application runs out of memory while gathering liveness information</u>, G1 performs an in-place <u>stop-the-world full heap compaction (Full GC)</u> like other collectors.
 
-After space-reclamation, the collection cycle restarts with another young-only phase. 
+### Garbage-First Internals
 
-As backup, if the application runs out of memory while gathering liveness information, G1 performs an in-place stop-the-world full heap compaction (Full GC) like other collectors.
+This section describes some important details of the Garbage-First (G1) garbage collector.
+
+---
+
+**Determining Initiating Heap Occupancy**
+
+The **Initiating Heap Occupancy Percent (IHOP)** is the threshold at which <u>an Initial Mark collection is triggered</u> and it is <u>defined as a percentage of the old generation size</u>.
+
+Adaptive IHOP :
+
+- G1 by default <u>automatically determines an optimal IHOP by observing how long marking takes and how much memory is typically allocated in the old generation during marking cycles</u>. This feature is called *Adaptive IHOP*. 
+- If *Adaptive IHOP* is active, then the option <u>`-XX:InitiatingHeapOccupancyPercent` determines the initial value as a percentage of the size of the current old generation as long as there aren't enough observations to make a good prediction of the Initiating Heap Occupancy threshold</u>. 
+
+Turn off Adaptive IHOP of G1 using the option`-XX:-G1UseAdaptiveIHOP`. In this case, the value of `-XX:InitiatingHeapOccupancyPercent` always determines this threshold.
+
+Internally, <u>Adaptive IHOP tries to set the Initiating Heap Occupancy</u> so that the first mixed garbage collection of the space-reclamation phase starts when the old generation occupancy is at a <u>*current maximum old generation size*</u> <u>minus</u> the <u>*value of `-XX:G1HeapReservePercent`*</u> <u>as the extra buffer</u>.
+
+---
+
+**Marking**
+
+G1 marking uses an algorithm called **Snapshot-At-The-Beginning (SATB)** :
+
+- It <u>takes a virtual snapshot of the heap at the time of the Initial Mark pause</u>, when **all objects that were live at the start of marking are considered live for the remainder of marking**. 
+- This means that <u>objects that become dead (unreachable) during marking are still considered live</u> for the purpose of space-reclamation (with some exceptions). 
+
+This may cause some additional memory wrongly retained compared to other collectors. However, SATB potentially <u>provides better latency during the Remark pause</u>. 
+
+> See the [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) topic for more information about problems with marking.
+
+ **The too conservatively considered live objects during that marking willbe reclaimed during the next marking**. 
+
+---
+
+**Behavior in Very Tight Heap Situations**
+
+When the application <u>keeps alive so much memory</u> so that an <u>evacuation can't find enough space to copy to</u>, **an evacuation failure occurs**. 
+
+*Evacuation failure* means that G1 tries to **complete the current garbage collection by <u>keeping any objects that have already been moved in their new location</u>, and <u>not copying any not yet moved objects, only adjusting references between the object</u>** . 
+
+> *Evacuation failure* may incur some additional overhead（额外开销）, but generally should be as fast as other young collections. 
+
+<u>After</u> this garbage collection with the <u>evacuation failure</u>, <u>G1 will resume the application as normal</u> without any other measures :
+
+- <u>G1 assumes</u> that the evacuation failure occurred close to the end of the garbage collection; that is, <u>most objects were already moved</u> and <u>there is enough space left to continue running the application until marking completes and space-reclamation starts</u>.
+- I<u>f this assumption doesn’t hold, then G1 will eventually schedule a Full GC</u>. This type of collection performs in-place compaction of the entire heap. This might be very slow.
 
 
+> See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about problems with allocation failure or Full GC's before signalling out of memory.
+
+---
+
+**Humongous Objects**
+
+Humongous objects are objects larger or equal the size of half a region. The current region size is determined ergonomically as described in the [Ergonomic Defaults for G1 GC](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#GUID-082C967F-2DAC-4B59-8A81-0CEC6EEB9016) section, unless set using the `-XX:G1HeapRegionSize` option.
+
+These humongous objects are sometimes treated in special ways:
+
+- Every humongous object <u>gets allocated as **a sequence of contiguous regions** in the old generation</u> :
+	- The start of the object itself is always located <u>at the start of the first region in that sequence</u>. 
+	- <u>Any leftover space in the last region of the sequence will be lost for allocation until the entire object is reclaimed</u>.
+- Reclaim humongous objects:
+	- <u>Generally</u>, humongous objects can <u>be reclaimed only at the end of marking</u> during the Cleanup pause, or during Full GC if they became unreachable. 
+	- There is, however, a <u>special provision for humongous objects for arrays of primitive types</u> for example, `bool`, all kinds of integers, and floating point values. 
+	- G1 opportunistically <u>tries to reclaim humongous objects if they are not referenced by many objects at any kind of garbage collection pause</u>. This behavior is enabled by default but you can disable it with the option `-XX:G1EagerReclaimHumongousObjects`.
+- <u>Allocations of humongous objects may cause garbage collection pauses to occur prematurely</u>. G1 checks the Initiating Heap Occupancy threshold at every humongous object allocation and may force an initial mark young collection immediately, if current occupancy exceeds that threshold.
+- The <u>humongous objects never move</u>, not even during a Full GC. This <u>can cause premature slow Full GCs or unexpected out-of-memory conditions</u> with lots of free space left due to fragmentation of the region space.
+
+---
+
+**Young-Only Phase Generation Sizing**
+
+During the young-only phase, the set of regions to collect (collection set), consists only of young generation regions. G1 always sizes the young generation at the end of a young-only collection. This way, G1 can meet the pause time goals that were set using `-XX:MaxGCPauseTimeMillis` and `-XX:PauseTimeIntervalMillis` based on long-term observations of actual pause time. It takes into account how long it took young generations of similar size to evacuate. This includes information like how many objects had to be copied during collection, and how interconnected these objects had been.
+
+
+
+---
+
+清理 young gen 都是复制算法，清理 Old 有标记整理和标记清理算法。
+Serial Old 和 Parallel Old 都是标记整理算法，不会产生内存碎片；标记清理只对标记了的对象进行清理，所以可以多线程并发清理，不用 STW，所以时间短，但是会有碎片
+
+![g1 heap allocation](https://www.oracle.com/webfolder/technetwork/tutorials/obe/java/G1GettingStarted/images/slide9.png)
+
+G1 将内存结构视为棋盘状，也就是一个一个的格子，每个格子可以是 Old Gen, young gen 和 Survivor 的区域。每个格子的大小是 1MB 到 32MB(必须是 2 的幂次方大小），格子个数大概是 2000 个
+
+格子（Region）
+
+如果对象的个数太大：
+
+- 0.5 region <= 对象 < 1 region 会直接存进 old gen 的 region ,并将该region 标记为 H 区（Humorous）
+- 1 region < 对象，会先申请多个连续的 H 区，然后存入 
+
+Rset：记录其他region的对象引用了当前region的对象
+Cset: 本次 GC 需要清理的 region 集合
+
+Mix GC：
+
+1. 初次标记: GC Root 对象及Root Region（ GC Root 对象所在的 Region）,会 STW
+2. 扫描 Old Gen 的所有 Region，查看这些 region 的 Rset 中是否含有 root region, if have ,then mark
+3. 并发标记：遍历上一步 marked 的 region，然后 mark
+4. 重新标记，用 SATB 算法，STW
+5. 复制清理，STW
+
+复制清理 Copyting/Cleanup Phase：只清理垃圾较多的region，young gen 继续放到 s1 或 s0，虽然垃圾清理不干净，不过耗时短
+
+---
+
+The Mostly Concurrent Collectors
+
+Concurrent Mark Sweep (CMS) collector and Garbage-First (G1) garbage collector are the two mostly concurrent collectors. Mostly concurrent collectors perform some expensive, work concurrently to the application .
+
+- G1 garbage collector: This server-style collector is for multiprocessor machines with a large amount of memory. It meets garbage collection pause-time goals with high probability, while achieving high throughput.
+
+	G1 is selected by default on certain hardware and operating system configurations, or can be explicitly enabled using`-XX:+UseG1GC` .
+
+- CMS collector : This collector is for applications that prefer shorter garbage collection pauses and can afford to share processor resources with the garbage collection.
+
+	Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
+
+The CMS collector is deprecated as of JDK 9.
+
+---
+
+**Selecting a Collector**
+
+查看当前 Collector：`java -XX:+PrintCommandLineFlags -version`
+
+Unless your application has rather strict pause-time requirements, first run your application and allow the VM to select a collector.
+
+If necessary, adjust the heap size to improve performance. If the performance still doesn't meet your goals, then use the following guidelines as a starting point for selecting a collector:
+
+- If the application has a small data set (up to approximately 100 MB), then select the serial collector with the option -XX:+UseSerialGC.
+- If the application will be run on a single processor and there are no pause-time requirements, then select the serial collector with the option -XX:+UseSerialGC.
+- If (a) peak application performance is the first priority and (b) there are no pause-time requirements or pauses of one second or longer are acceptable, then let the VM select the collector or select the parallel collector with -XX:+UseParallelGC.
+- If response time is more important than overall throughput and garbage collection pauses must be kept shorter than approximately one second, then select a concurrent collector with -XX:+UseG1GC or -XX:+UseConcMarkSweepGC.
+
+These guidelines provide only a starting point for selecting a collector because performance is dependent on the size of the heap, the amount of live data maintained by the application, and the number and speed of available processors. Pause-time is particularly sensitive to these factors, so the threshold of one second mentioned previously is only approximate. The parallel collector will experience a pause time longer than one second on many heap size and hardware combinations. Conversely, the concurrent collectors may not be able to keep pauses shorter than one seconds in some cases.
+
+If the recommended collector doesn't achieve the desired performance, then first attempt to adjust the heap and generation sizes to meet the desired goals. If performance is still inadequate, then try a different collector: Use the concurrent collector to reduce pause-time, and use the parallel collector to increase overall throughput on multiprocessor hardware.
 
 # JVM Performance Tuning：Java 虚拟机调优
 
