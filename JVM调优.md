@@ -1,4 +1,6 @@
-# Garbage Collection Basics
+# Garbage Collection
+
+## GC Basics
 
 Automatic Garbage Collection: 
 
@@ -19,6 +21,45 @@ In Java, process of deallocating memory is handled automatically by the garbage 
 参考资料：
 
 - [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
+
+## GC Algorithms
+
+GC 常用算法：
+
+* Copying（复制算法）：
+	* 步骤：
+		1. 将空间分位 2 个区域，其中一个区域存放 Objects，另一个区域为空
+		2. 扫描存放了 objects 的当前区域，将其中的 live objects 紧凑地 copy 到另一个区域，然后销毁当前区域的所有的 objects
+		3. 交替两个区域的功能角色，等待下次 GC
+	* 优点：开销比较小，没有内存碎片
+	* 缺点：需要 2 倍的内存空间，而且其中一个空间会被浪费
+	* 使用场景：Objects 的存活度较低的 Young Gen
+* Mark-Sweep（标记清除）：
+	* 步骤：
+		1. 扫描区域内的所有 objects，mark（标记）所有 live objects
+		2. 定点 sweep（清除）没有被标记的 objects
+	* 优点：不需要额外的空间
+	* 缺点：
+		* 两次扫描严重浪费时间，会产生 fragmentation（内存碎片），导致后续需要存放 Humorous Object 的时候，无法分配连续的内存空间
+		* Mark 和 Sweep 两个过程的效率都不高
+* Mark-Compact（标记压缩/标记整理）：
+	* 步骤：
+		1. Mark reachable objects（标记 live objects）
+		2. Then a compacting step relocates the marked objects towards the beginning of the heap area（将 live objects 压缩到一段连续的内存空间中）
+		3. 除了存放 live objects 的那段连续的内存空间，其余空间的 Objects 全部销毁掉
+	* 使用场景：有较多 live objects 的 Old Gen
+
+GC Algorithms 的简单比较：
+
+- Copying 的效率最高，但内存利用率不及 Mark-Compact 和 Mark-Sweep
+- 内存整齐度：Copying = Mark-Compact > Mark-Sweep
+
+Generational Collection：
+
+- Young Gen：Objects 存活率低，所以 live objects 比较少，使用高效的 Copying 所需要的“复制对象”的成本，就会相应降低
+- Old Gen：Objects 存活率高，而且因为本身占据的空间就很大了，没有额外的空间去完成 Copying，所以混合使用 Mark-Sweep + Mark-Compact（所以，这里也是调优的重点）
+
+
 
 # JVM Garbage Collectors
 
@@ -568,55 +609,6 @@ Table 10-1 Tunable Defaults G1 GC
 
 
 Note: `<ergo>` means that the actual value is determined ergonomically depending on the environment.
-
-
-
-# 临时草稿
-
----
-
-清理 young gen 都是复制算法，清理 Old 有标记整理和标记清理算法。
-Serial Old 和 Parallel Old 都是标记整理算法，不会产生内存碎片；标记清理只对标记了的对象进行清理，所以可以多线程并发清理，不用 STW，所以时间短，但是会有碎片
-
-![g1 heap allocation](https://www.oracle.com/webfolder/technetwork/tutorials/obe/java/G1GettingStarted/images/slide9.png)
-
-G1 将内存结构视为棋盘状，也就是一个一个的格子，每个格子可以是 Old Gen, young gen 和 Survivor 的区域。每个格子的大小是 1MB 到 32MB(必须是 2 的幂次方大小），格子个数大概是 2000 个
-
-格子（Region）
-
-如果对象的个数太大：
-
-- 0.5 region <= 对象 < 1 region 会直接存进 old gen 的 region ,并将该region 标记为 H 区（Humorous）
-- 1 region < 对象，会先申请多个连续的 H 区，然后存入 
-
-Rset：记录其他region的对象引用了当前region的对象
-Cset: 本次 GC 需要清理的 region 集合
-
-Mix GC：
-
-1. 初次标记: GC Root 对象及Root Region（ GC Root 对象所在的 Region）,会 STW
-2. 扫描 Old Gen 的所有 Region，查看这些 region 的 Rset 中是否含有 root region, if have ,then mark
-3. 并发标记：遍历上一步 marked 的 region，然后 mark
-4. 重新标记，用 SATB 算法，STW
-5. 复制清理，STW
-
-复制清理 Copyting/Cleanup Phase：只清理垃圾较多的region，young gen 继续放到 s1 或 s0，虽然垃圾清理不干净，不过耗时短
-
----
-
-The Mostly Concurrent Collectors
-
-Concurrent Mark Sweep (CMS) collector and Garbage-First (G1) garbage collector are the two mostly concurrent collectors. Mostly concurrent collectors perform some expensive, work concurrently to the application .
-
-- G1 garbage collector: This server-style collector is for multiprocessor machines with a large amount of memory. It meets garbage collection pause-time goals with high probability, while achieving high throughput.
-
-	G1 is selected by default on certain hardware and operating system configurations, or can be explicitly enabled using`-XX:+UseG1GC` .
-
-- CMS collector : This collector is for applications that prefer shorter garbage collection pauses and can afford to share processor resources with the garbage collection.
-
-	Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
-
-The CMS collector is deprecated as of JDK 9.
 
 
 
