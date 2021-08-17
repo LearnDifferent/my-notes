@@ -1,5 +1,3 @@
-
-
 # Garbage Collection Basics
 
 Automatic Garbage Collection: 
@@ -168,13 +166,11 @@ Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 	- 等待下次 CMS 的触发
 	- 可以和其他正在运行的线程同时运行的线程，<u>不会 STW</u>
 
-# Garbage-First Garbage Collector
+# G1
 
-参考资料：官方文档 - [9 Garbage-First Garbage Collector](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-0394E76A-1A8F-425E-A0D0-B48A3DC82B42)
+参考资料：官方文档 - [Garbage-First Garbage Collector](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-0394E76A-1A8F-425E-A0D0-B48A3DC82B42)
 
 ## G1 Basic
-
-### Basic
 
 > The G1 (Garbage-First) garbage collector is the default collector, so typically you don't have to perform any additional actions. You can explicitly enable it by providing `-XX:+UseG1GC` on the command line.
 
@@ -211,7 +207,7 @@ G1 aims to provide the best balance between latency and throughput using current
 
 ~~The G1 collector achieves high performance and tries to meet pause-time goals in several ways described in the following sections.~~
 
-### Heap Layout
+## Heap Layout
 
 **G1 partitions the heap into a set of equally sized heap regions, each a contiguous range of virtual memory** as shown in Figure 9-1.
 
@@ -227,7 +223,7 @@ G1 aims to provide the best balance between latency and throughput using current
 >
 > Light blue: Old Regions
 >
-> light blue with "H": Old Regions for Humongous Object
+> light blue with "H": Humongous Regions
 
 **A region is the unit of memory allocation and memory reclamation** :
 
@@ -243,7 +239,7 @@ G1 garbage collection pauses can reclaim space in the young generation as a whol
 
 During the pause G1 copies objects from this *collection set* to one or more different regions in the heap. The destination region for an object depends on the source region of that object: the entire young generation is copied into either survivor or old regions, and objects from old regions to other, different old regions using aging.
 
-### Garbage Collection Cycle
+## GC Cycle
 
 On a high level, the G1 collector alternates between two phases: 
 
@@ -279,11 +275,13 @@ The following list describes **the phases, their pauses and the transition betwe
 3. After space-reclamation, the collection cycle restarts with another young-only phase. 
 4. As backup, <u>if the application runs out of memory while gathering liveness information</u>, G1 performs an in-place <u>stop-the-world full heap compaction (Full GC)</u> like other collectors.
 
-## Garbage-First Internals
+## G1 Internals
 
 This section describes some important details of the Garbage-First (G1) garbage collector.
 
-### Determining Initiating Heap Occupancy
+### IHOP
+
+About Determining Initiating Heap Occupancy.
 
 The **Initiating Heap Occupancy Percent (IHOP)** is the threshold at which <u>an Initial Mark collection is triggered</u> and it is <u>defined as a percentage of the old generation size</u>.
 
@@ -342,9 +340,129 @@ These humongous objects are sometimes treated in special ways:
 
 ### Young-Only Phase Generation Sizing
 
-During the young-only phase, the set of regions to collect (collection set), consists only of young generation regions. G1 always sizes the young generation at the end of a young-only collection. This way, G1 can meet the pause time goals that were set using `-XX:MaxGCPauseTimeMillis` and `-XX:PauseTimeIntervalMillis` based on long-term observations of actual pause time. It takes into account how long it took young generations of similar size to evacuate. This includes information like how many objects had to be copied during collection, and how interconnected these objects had been.
+During the young-only phase, the set of regions to collect (collection set), consists only of young generation regions. 
 
-## 临时草稿
+G1 always sizes the young generation at the end of a young-only collection: 
+
+- This way, G1 can meet the pause time goals that were set using `-XX:MaxGCPauseTimeMillis` and `-XX:PauseTimeIntervalMillis` based on long-term observations of actual pause time
+- It takes into account how long it took young generations of similar size to evacuate. This includes information like how many objects had to be copied during collection, and how interconnected these objects had been.
+
+If not otherwise constrained, then G1 adaptively sizes the young generation size between the values that `-XX:G1NewSizePercent` and `-XX:G1MaxNewSizePercent` determine to meet pause-time. 
+
+> See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about how to fix long pauses.
+
+### Space-Reclamation Phase Generation Sizing
+
+During the space-reclamation phase, G1 <u>tries to maximize the amount of space that's reclaimed in the old generation in a single garbage collection pause</u> :
+
+- The size of the **young generation is set to minimum** allowed, typically as determined by -XX:G1NewSizePercent, 
+- and **any old generation regions to reclaim space are added** <u>until G1 determines that adding further regions will exceed the pause time goal</u>. 
+
+In a particular garbage collection pause, G1 **adds old generation regions in order of their reclamation efficiency, highest first, and the remaining available time** <u>to get the final collection set</u>.
+
+The number of old generation regions to take per garbage collection is bounded at the lower end by the number of potential candidate old generation regions (*collection set candidate regions*) to collect, divided by the length of the space-reclamation phase as determined by `-XX:G1MixedGCCountTarget`. 
+
+The **collection set candidate regions** are all <u>old generation regions that have an occupancy that's lower than `-XX:G1MixedGCLiveThresholdPercent` at the start of the phase</u>.
+
+**The phase ends when the remaining amount of space that can be reclaimed in the collection set candidate regions is less than the percentage set by `-XX:G1HeapWastePercent`.**
+
+> See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about how many old generation regions G1 will use and how to avoid long mixed collection pauses.
+
+## Ergonomic Defaults for G1
+
+This topic provides an overview of the most important defaults specific to G1 and their default values. They give a rough overview of expected behavior and resource usage using G1 without any additional options.
+
+| Option and Default Value                                     | Description                                                  |
+| :----------------------------------------------------------- | :----------------------------------------------------------- |
+| `-XX:MaxGCPauseMillis=200`                                   | The goal for the maximum pause time.                         |
+| `-XX:GCPauseTimeInterval`=*<ergo>*                           | The goal for the maximum pause time interval. By default G1 doesn’t set any goal, allowing G1 to perform garbage collections back-to-back in extreme cases. |
+| `-XX:ParallelGCThreads`=*<ergo>*                             | The maximum number of threads used for parallel work during garbage collection pauses. This is derived from the number of available threads of the computer that the VM runs on in the following way: if the number of CPU threads available to the process is fewer than or equal to 8, use that. Otherwise add five eighths of the threads greater than to the final number of threads. |
+| `-XX:ConcGCThreads`=*<ergo>*                                 | The maximum number of threads used for concurrent work. By default, this value is `-XX:ParallelGCThreads` divided by 4. |
+| `-XX:+G1UseAdaptiveIHOP` `-XX:InitiatingHeapOccupancyPercent=45` | Defaults for controlling the initiating heap occupancy indicate that adaptive determination of that value is turned on, and that for the first few collection cycles G1 will use an occupancy of 45% of the old generation as mark start threshold. |
+| `-XX:G1HeapRegionSize=<ergo> `                               | The set of the heap region size based on initial and maximum heap size. So that heap contains roughly 2048 heap regions. The size of a heap region can vary from 1 to 32 MB, and must be a power of 2. |
+| `-XX:G1NewSizePercent=5` `-XX:G1MaxNewSizePercent=60`        | The size of the young generation in total, which varies between these two values as percentages of the current Java heap in use. |
+| `-XX:G1HeapWastePercent=5`                                   | The allowed unreclaimed space in the collection set candidates as a percentage. G1 stops the space-reclamation phase if the free space in the collection set candidates is lower than that. |
+| `-XX:G1MixedGCCountTarget=8`                                 | The expected length of the space-reclamation phase in a number of collections. |
+| `-XX:G1MixedGCLiveThresholdPercent=85`                       | Old generation regions with higher live object occupancy than this percentage aren't collected in this space-reclamation phase. |
+
+Note: `<ergo>` means that the actual value is determined ergonomically depending on the environment.
+
+## Comparison to Other Collectors
+
+This is a summary of the main differences between G1 and the other collectors:
+
+- Parallel GC can compact and reclaim space in the old generation only as a whole. G1 incrementally distributes this work across multiple much shorter collections. This substantially shortens pause time at the potential expense of throughput.
+- Similar to the CMS, G1 concurrently performs part of the old generation space-reclamation concurrently. However, CMS can't defragment the old generation heap, eventually running into long Full GC's.
+- G1 may exhibit higher overhead than other collectors, affecting throughput due to its concurrent nature.
+
+Due to how it works, G1 has some unique mechanisms to improve garbage collection efficiency:
+
+- G1 can reclaim some completely empty, large areas of the old generation during any collection. This could avoid many otherwise unnecessary garbage collections, freeing a significant amount of space without much effort.
+- G1 can optionally try to deduplicate duplicate strings on the Java heap concurrently.
+
+Reclaiming empty, large objects from the old generation is always enabled. You can disable this feature with the option `-XX:-G1EagerReclaimHumongousObjects`. String deduplication is disabled by default. You can enable it using the option `-XX:+G1EnableStringDeduplication`.
+
+# G1 Tuning
+
+This section describes how to adapt Garbage-First garbage collector (G1 GC) behavior in case it does not meet your requirements.
+
+## General
+
+### General Recommendations
+
+The general recommendation is to use G1 with its default settings, eventually giving it a different pause-time goal and setting a maximum Java heap size by using `-Xmx` if desired.
+
+G1 defaults have been balanced differently than either of the other collectors. G1's goals in the default configuration are neither maximum throughput nor lowest latency, but to <u>provide relatively small, uniform（均匀的） pauses at high throughput</u>. However, G1's mechanisms to incrementally reclaim space in the heap and the pause-time control incur some overhead in both the application threads and in the space-reclamation efficiency.
+
+If you prefer **high throughput**, then **relax the pause-time goal by using `-XX:MaxGCPauseMillis`** or **provide a larger heap**. 
+
+If **latency** is the main requirement, then **modify the pause-time target** . **Avoid limiting the young generation size to particular values by using options like `-Xmn`, `-XX:NewRatio`** and others <u>because the young generation size is the main means for G1 to allow it to meet the pause-time</u>. Setting the young generation size to a single value overrides and practically disables pause-time control.
+
+### Moving to G1 from Other Collectors
+
+Generally, when moving to G1 from other collectors, particularly the Concurrent Mark Sweep collector, start by removing all options that affect garbage collection, and only set the pause-time goal and overall heap size by using `-Xmx` and optionally `-Xms`.
+
+Many options that are useful for other collectors to respond in some particular way, have either no effect at all, or even decrease throughput and the likelihood to meet the pause-time target. An example could be setting young generation sizes that completely prevent G1 from adjusting the young generation size to meet pause-time goals.
+
+## Improving G1 Performance
+
+For diagnosis purposes, G1 provides comprehensive logging. A good start is to **use the `-Xlog:gc*=debug` option** and then refine the output from that if necessary. 
+
+The log provides a detailed overview during and outside the pauses about garbage collection activity. This includes the type of collection and a breakdown of time spent in particular phases of the pause.
+
+### Observing Full GC
+
+A full heap garbage collection (Full GC) is often very time consuming，可以添加 `-Xlog:gc*=debug` 输出 log：
+
+- Full GCs caused by too high heap occupancy in the old generation can be detected by finding the words `Pause Full` (Allocation Failure) in the log
+- Full GCs are typically preceded by garbage collections that encounter an evacuation failure indicated by `To-space exhausted` tags.
+
+The reason that a <u>Full GC occurs</u> is <u>because the application allocates too many objects that can't be reclaimed quickly enough</u> :
+
+- Often concurrent marking has not been able to complete in time to start a space-reclamation phase. 
+- The probability to run into a Full GC can be compounded by the allocation of many humongous objects. Due to the way these objects are allocated in G1, they may take up much more memory than expected.
+
+**The goal should be to ensure that concurrent marking completes on time.** This can be achieved by : 
+
+- **decreasing the allocation rate in the old generation**
+- **giving the concurrent marking more time to complete.**
+
+G1 gives you several options to handle this situation better:
+
+- If there are <u>a significant number of humongous objects on the Java heap</u>, then **`gc+heap=info` logging shows the number next to humongous regions**. After every garbage collection, the best option is to try to reduce the number of objects. You can achieve this by increasing the region size using the `-XX:G1HeapRegionSize` option. The currently selected heap region size is printed at the beginning of the log.
+- Increase the size of the Java heap. This typically increases the amount of time marking has to complete.
+- Increase the number of concurrent marking threads by setting `-XX:ConcGCThreads` explicitly.
+- Force G1 to start marking earlier. G1 automatically determines the Initiating Heap Occupancy Percent (IHOP) threshold based on earlier application behavior. If the application behavior changes, these predictions might be wrong. There are two options: Lower the target occupancy for when to start space-reclamation by increasing the buffer used in an adaptive IHOP calculation by modifying `-XX:G1ReservePercent`; or, disable the adaptive calculation of the IHOP by setting it manually using `-XX:-G1UseAdaptiveIHOP` and `-XX:InitiatingHeapOccupancyPercent`.
+
+Other causes than Allocation Failure for a Full GC typically indicate that either the application or some external tool causes a full heap collection. If the cause is `System.gc()`, and there is no way to modify the application sources, the effect of Full GCs can be mitigated by using `-XX:+ExplicitGCInvokesConcurrent` or let the VM completely ignore them by setting `-XX:+DisableExplicitGC`. External tools may still force Full GCs; they can be removed only by not requesting them.
+
+
+
+
+
+
+
+# 临时草稿
 
 ---
 
