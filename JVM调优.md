@@ -449,16 +449,125 @@ The reason that a <u>Full GC occurs</u> is <u>because the application allocates 
 
 G1 gives you several options to handle this situation better:
 
-- If there are <u>a significant number of humongous objects on the Java heap</u>, then **`gc+heap=info` logging shows the number next to humongous regions**. After every garbage collection, the best option is to try to reduce the number of objects. You can achieve this by increasing the region size using the `-XX:G1HeapRegionSize` option. The currently selected heap region size is printed at the beginning of the log.
-- Increase the size of the Java heap. This typically increases the amount of time marking has to complete.
-- Increase the number of concurrent marking threads by setting `-XX:ConcGCThreads` explicitly.
-- Force G1 to start marking earlier. G1 automatically determines the Initiating Heap Occupancy Percent (IHOP) threshold based on earlier application behavior. If the application behavior changes, these predictions might be wrong. There are two options: Lower the target occupancy for when to start space-reclamation by increasing the buffer used in an adaptive IHOP calculation by modifying `-XX:G1ReservePercent`; or, disable the adaptive calculation of the IHOP by setting it manually using `-XX:-G1UseAdaptiveIHOP` and `-XX:InitiatingHeapOccupancyPercent`.
+- If there are <u>a significant number of humongous objects on the Java heap</u>, then `gc+heap=info` logging shows the number next to humongous regions. After every garbage collection, the best option is to <u>try to reduce the number of objects</u>. You can achieve this by **increasing the region size using the `-XX:G1HeapRegionSize` option**. The currently selected heap region size is printed at the beginning of the log.
+- **Increase the size of the Java heap**. This typically <u>increases the amount of time marking has to complete</u>.
+- **Increase the number of concurrent marking threads by setting `-XX:ConcGCThreads` explicitly**.
+- **Force G1 to start marking earlier**. G1 automatically determines the Initiating Heap Occupancy Percent (IHOP) threshold based on earlier application behavior. If the application behavior changes, these predictions might be wrong. There are two options: <u>Lower the target occupancy for when to start space-reclamation by increasing the buffer used in an adaptive IHOP calculation by **modifying `-XX:G1ReservePercent`**</u>; or, <u>disable the adaptive calculation of the IHOP by **setting it manually using `-XX:-G1UseAdaptiveIHOP` and `-XX:InitiatingHeapOccupancyPercent`**.</u>
 
-Other causes than Allocation Failure for a Full GC typically indicate that either the application or some external tool causes a full heap collection. If the cause is `System.gc()`, and there is no way to modify the application sources, the effect of Full GCs can be mitigated by using `-XX:+ExplicitGCInvokesConcurrent` or let the VM completely ignore them by setting `-XX:+DisableExplicitGC`. External tools may still force Full GCs; they can be removed only by not requesting them.
+Other causes than Allocation Failure for a Full GC typically indicate that either the application or some external tool causes a full heap collection. <u>If the cause is `System.gc()`, and there is no way to modify the application sources, the effect of Full GCs can be mitigated by using `-XX:+ExplicitGCInvokesConcurrent` or let the VM completely ignore them by setting `-XX:+DisableExplicitGC`</u>. External tools may still force Full GCs; they can be removed only by not requesting them.
+
+### Humongous Object Fragmentation
+
+<u>A Full GC could occur before all Java heap memory has been exhausted due to the necessity of finding a contiguous set of regions for them</u>. 
+
+Potential options in this case are **increasing the heap region size by using the option `-XX:G1HeapRegionSize` to decrease the number of humongous objects**, or **increasing size of the heap**.
+
+In extreme cases, there might not be enough contiguous space available for G1 to allocate the object even if available memory indicates otherwise. This would lead to a VM exit if that Full GC can not reclaim enough contiguous space. As a result, there are no other options than either decreasing the amount of humongous object allocations as mentioned previously, or increasing the heap.
 
 
 
+### Tuning for Latency
 
+This section discusses hints to improve G1 behavior in case of common latency problems that is, if the pause-time is too high.
+
+
+
+#### Unusual System or Real-Time Usage
+
+For every garbage collection pause, the `gc+cpu=info` log output contains a line including information from the operating system with a breakdown about where during the pause-time has been spent. An example for such output is `User=0.19s Sys=0.00s Real=0.01s`.
+
+User time is time spent in VM code, *system time* is the time spent in the operating system, and *real time* is the amount of absolute time passed during the pause. If the system time is relatively high, then most often the environment is the cause.
+
+Common known issues for high system time are:
+
+- The VM allocating or giving back memory from the operating system memory may cause unnecessary delays. Avoid the delays by setting minimum and maximum heap sizes to the same value using the options `-Xms` and `-Xmx`, and pre-touching all memory using `-XX:+AlwaysPreTouch` to move this work to the VM startup phase.
+- Particularly in Linux, coalescing of small pages into huge pages by the *Transparent Huge Pages (THP)* feature tends to stall random processes, not just during a pause. Because the VM allocates and maintains a lot of memory, there is a higher than usual risk that the VM will be the process that stalls for a long time. Refer to the documentation of your operating system on how to disable the Transparent Huge Pages feature.
+- Writing the log output may stall for some time because of some background task intermittently taking up all I/O bandwidth for the hard disk the log is written to. Consider using a separate disk for your logs or some other storage, for example memory-backed file system to avoid this.
+
+Another situation to look out for is real time being a lot larger than the sum of the others this may indicate that the VM did not get enough CPU time on a possibly overloaded machine.
+
+
+
+#### Reference Object Processing Takes Too Long
+
+Information about the time taken for processing of Reference Objects is shown in the *Ref Proc* and *Ref Enq* phases. During the Ref Proc phase, G1 updates the referents of Reference Objects according to the requirements of their particular type. In Ref Enq, G1 enqueues Reference Objects into their respective reference queue if their referents were found dead. If these phases take too long, then consider enabling parallelization of these phases by using the option `-XX:+ParallelRefProcEnabled`.
+
+
+
+#### Young-Only Collections Take Too Long
+
+Young-only and, in general any young collection roughly takes time proportional to the size of the young generation, or more specifically, the number of live objects within the collection set that needs to be copied. If the *Evacuate Collection Set* phase takes too long, in particular, the *Object Copy* sub-phase, decrease `-XX:G1NewSizePercent`. This decreases the minimum size of the young generation, allowing for potentially shorter pauses.
+
+Another problem with sizing of the young generation may occur if application performance, and in particular the amount of objects surviving a collection, suddenly changes. This may cause spikes in garbage collection pause time. It might be useful to decrease the maximum young generation size by using `-XX:G1MaxNewSizePercent`. This limits the maximum size of the young generation and so the number of objects that need to be processed during the pause.
+
+
+
+#### Mixed Collections Take Too Long
+
+Mixed collections are used to reclaim space in the old generation. The collection set of mixed collections contains young and old generation regions. You can obtain information about how much time evacuation of either young or old generation regions contribute to the pause-time by enabling the `gc+ergo+cset=trace` log output. Look at the *predicted young region* time and *predicted old region* time for young and old generation regions respectively.
+
+If the predicted young region time is too long, then see [Young-Only Collections Take Too Long](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-5FD5BDB1-DB7D-4E31-9296-19C0A28F810C) for options. Otherwise, to reduce the contribution of the old generation regions to the pause-time, G1 provides three options:
+
+- Spread the old generation region reclamation across more garbage collections by increasing `-XX:G1MixedGCCountTarget`.
+- Avoid collecting regions that take a proportionally large amount of time to collect by not putting them into the candidate collection set by using -`XX:G1MixedGCLiveThresholdPercent`. In many cases, highly occupied regions take a lot of time to collect.
+- Stop old generation space reclamation earlier so that G1 won't collect as many highly occupied regions. In this case, increase `-XX:G1HeapWastePercent`.
+
+Note that the last two options decrease the amount of collection set candidate regions where space can be reclaimed for the current space-reclamation phase. This may mean that G1 may not be able to reclaim enough space in the old generation for sustained operation. However, later space-reclamation phases may be able to garbage collect them.
+
+
+
+#### High Update RS and Scan RS Times
+
+To enable G1 to evacuate single old generation regions, G1 tracks locations of *cross-region references*, that is references that point from one region to another. The set of cross-region references pointing into a given region is called that region's *remembered set*. The remembered sets must be updated when moving the contents of a region. Maintenance of the regions' remembered sets is mostly concurrent. For performance purposes, G1 doesn't immediately update the remembered set of a region when the application installs a new cross-region reference between two objects. Remembered set update requests are delayed and batched for efficiency.
+
+G1 requires complete remembered sets for garbage collection, so the *Update RS* phase of the garbage collection processes any outstanding remembered set update requests. The *Scan RS* phase searches for object references in remembered sets, moves region contents, and then updates these object references to the new locations. Depending on the application, these two phases may take a significant amount of time.
+
+Adjusting the size of the heap regions by using the option `-XX:G1HeapRegionSize` affects the number of cross-region references and as well as the size of the remembered set. Handling the remembered sets for regions may be a significant part of garbage collection work, so this has a direct effect on the achievable maximum pause time. Larger regions tend to have fewer cross-region references, so the relative amount of work spent in processing them decreases, although at the same time, larger regions may mean more live objects to evacuate per region, increasing the time for other phases.
+
+G1 tries to schedule concurrent processing of the remembered set updates so that the Update RS phase takes approximately `-XX:G1RSetUpdatingPauseTimePercent` percent of the allowed maximum pause time. By decreasing this value, G1 usually performs more remembered set update work concurrently.
+
+Spurious high Update RS times in combination with the application allocating large objects may be caused by an optimization that tries to reduce concurrent remembered set update work by batching it. If the application that created such a batch happens just before a garbage collection, then the garbage collection must process all this work in the Update RS times part of the pause. Use `-XX:-ReduceInitialCardMarks` to disable this behavior and potentially avoid these situations.
+
+Scan RS Time is also determined by the amount of compression that G1 performs to keep remembered set storage size low. The more compact the remembered set is stored in memory, the more time it takes to retrieve the stored values during garbage collection. G1 automatically performs this compression, called remembered set coarsening, while updating the remembered sets depending on the current size of that region's remembered set. Particularly at the highest compression level, retrieving the actual data can be very slow. The option `-XX:G1SummarizeRSetStatsPeriod` in combination with `gc+remset=trace` level logging shows if this coarsening occurs. If so, then the `X` in the line `Did <X> coarsenings` in the *Before GC Summary* section shows a high value. The `-XX:G1RSetRegionEntries` option could be increased significantly to decrease the amount of these coarsenings. Avoid using this detailed remembered set logging in production environments as collecting this data can take a significant amount of time.
+
+
+
+### Tuning for Throughput
+
+G1's default policy tries to maintain a balance between throughput and latency; however, there are situations where higher throughput is desirable. Apart from decreasing the overall pause-times as described in the previous sections, the frequency of the pauses could be decreased. The main idea is to increase the maximum pause time by using `-XX:MaxGCPauseMillis`. The generation sizing heuristics will automatically adapt the size of the young generation, which directly determines the frequency of pauses. If that does not result in expected behavior, particularly during the space-reclamation phase, increasing the minimum young generation size using `-XX:G1NewSizePercent` will force G1 to do that.
+
+In some cases, `-XX:G1MaxNewSizePercent`, the maximum allowed young generation size, may limit throughput by limiting young generation size. This can be diagnosed by looking at region summary output of `gc+heap=info` logging. In this case the combined percentage of Eden regions and Survivor regions is close to `-XX:G1MaxNewSizePercent` percent of the total number of regions. Consider increasing`-XX:G1MaxNewSizePercent` in this case.
+
+Another option to increase throughput is to try to decrease the amount of concurrent work in particular, concurrent remembered set updates often require a lot of CPU resources. Increasing `-XX:G1RSetUpdatingPauseTimePercent` moves work from concurrent operation into the garbage collection pause. In the worst case, concurrent remembered set updates can be disabled by setting `-XX:-G1UseAdaptiveConcRefinement` `-XX:G1ConcRefinementGreenZone=``2G` `-XX:G1ConcRefinementThreads=``0`. This mostly disables this mechanism and moves all remembered set update work into the next garbage collection pause.
+
+Enabling the use of large pages by using `-XX:+UseLargePages` may also improve throughput. Refer to your operating system documentation on how to set up large pages.
+
+You can minimize heap resizing work by disabling it; set the options `-Xms` and `-Xmx` to the same value. In addition, you can use `-XX:+AlwaysPreTouch` to move the operating system work to back virtual memory with physical memory to VM startup time. Both of these measures can be particularly desirable in order to make pause-times more consistent.
+
+### Tuning for Heap Size
+
+Like other collectors, G1 aims to size the heap so that the time spent in garbage collection is below the ratio determined by the `-XX:GCTimeRatio` option. Adjust this option to make G1 meet your requirements.
+
+
+
+### Tunable Defaults
+
+This section describes the default values and some additional information about command-line options that are introduced in this topic.
+
+Table 10-1 Tunable Defaults G1 GC
+
+| Option and Default Value                                     | Description                                                  |
+| :----------------------------------------------------------- | :----------------------------------------------------------- |
+| `-XX:+G1UseAdaptiveConcRefinement` `-XX:G1ConcRefinementGreenZone=`*<ergo>*`-XX:G1ConcRefinementYellowZone=`*<ergo>*`-XX:G1ConcRefinementRedZone=`*<ergo>*`-XX:G1ConcRefinementThreads=`*<ergo>* | The concurrent remembered set update (refinement) uses these options to control the work distribution of concurrent refinement threads. G1 chooses the ergonomic values for these options so that `-XX:G1RSetUpdatingPauseTimePercent` time is spent in the garbage collection pause for processing any remaining work, adaptively adjusting them as needed. Change with caution because this may cause extremely long pauses. |
+| `-XX:+ReduceInitialCardMarks`                                | This batches together concurrent remembered set update (refinement) work for initial object allocations. |
+| `-XX:-ParallelRefProcEnabled`                                | This determines whether processing of java.lang.Ref.* instances should be done in parallel by multiple threads. |
+| `-XX:G1RSetUpdatingPauseTimePercent=10`                      | This determines the percentage of total garbage collection time G1 should spend in the Update RS phase updating any remaining remembered sets. G1 controls the amount of concurrent remembered set updates using this setting. |
+| `-XX:G1SummarizeRSetStatsPeriod=0`                           | This is the period in a number of GCs that G1 generates remembered set summary reports. Set this to zero to disable. Generating remembered set summary reports is a costly operation, so it should be used only if necessary, and with a reasonably high value. Use `gc+remset=trace` to print anything. |
+| `-XX:GCTimeRatio=12`                                         | This is the divisor for the target ratio of time that should be spent in garbage collection as opposed to the application. The actual formula for determining the target fraction of time that can be spent in garbage collection before increasing the heap is `1 / (1 + GCTimeRatio)`. This default value results in a target with about 8% of the time to be spent in garbage collection. |
+
+
+
+Note: `<ergo>` means that the actual value is determined ergonomically depending on the environment.
 
 
 
