@@ -830,4 +830,5 @@ git ls-files
 
 # git commit 提交规范
 
-参考：[GitHub 用户 woai3c 的这篇](https://github.com/woai3c/Front-end-articles/blob/master/git%20commit%20style.md)
+- [Git Commit Message Conventions](https://docs.google.com/document/d/1QrDFcIiPjSLDn3EL15IJygNPiHORgU1_OOAqWjiDU5Y/edit#heading=h.greljkmo14y0)
+- [Commit message 和 Change log 编写指南](https://www.ruanyifeng.com/blog/2016/01/commit_message_change_log.html)
