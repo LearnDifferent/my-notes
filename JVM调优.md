@@ -18,9 +18,81 @@ In Java, process of deallocating memory is handled automatically by the garbage 
 	- To further improve performance, in addition to deleting unreferenced objects, you can also compact the remaining referenced objects.
 	- By moving referenced object together, this makes new memory allocation much easier and faster
 
-参考资料：
+参考资料：[Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
 
-- [Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
+## GC Roots
+
+GC Roots：
+
+* GC Roots 是指一组必须活跃的引用。
+* 使用 GC Roots /“可达性分析算法”来判断对象是否存活，只要 GC Roots 能找到该对象，就说明存活，反之则不存活。
+
+GC Roots 基本思路：
+
+* 通过一系列名为「GCRoots」的对象作为起始点，从这个被称为 GC Roots 的对象开始向下搜索，如果一个对象到 GC Roots 没有任何 Reference Chain（引用链）相连时，则说明此对象不可用
+* 即给定一个集合的引用作为根出发，通过引用关系遍历对象图，能被遍历到的（可到达的）对象就被判定为存活，没有被遍历到的就自然被判定为死亡
+* 更多 GC Roots 内容，可以查阅 [JVM之GCRoots概述](https://blog.csdn.net/weixin_41910694/article/details/90706652)
+
+![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d053c7d6f7724a11a32ecda6c7104b2e~tplv-k3u1fbpfcp-zoom-1.image)
+
+**GC Roots 是 Reference Variables**（用于 point objects or values），会**指向 Heap 中的 Instance Objects**，且<u>不会被回收</u>。具体的 GC Roots 有：
+
+* JVM Stack 的 Stack Frame 中的 Local Variables
+* Metaspace 中 `static` 类静态属性
+* Metaspace 中 `final` 常量
+* Native Method Stack 中的 JNI（用于调用 Native 方法）
+
+[GC Roots 示例](https://www.cnblogs.com/rumenz/articles/14099927.html)：
+
+```java
+public class Rumenz{
+    public static void main(String[] args) {
+        Rumenz a = new Rumenz();
+        a = null;
+    }
+}
+```
+
+`a` 是 Stack 中的 Frame 的 Local Variable， `a` 储存的是 `new` 出来的 `Rumenz` 在 Heap 中的内存地址。
+
+也就是说，Local Variable `a` 是 Object `Rumenz` 的 Reference Variable，所以 `a` 是 GC Root。
+
+当 `a=null` 时，`a` 存储的就不再是 `Rumenz` 所在的内存地址了，所以 `Rumenz` 没有指向 `a` 这个 GC Root，`Rumenz` 将会被回收。
+
+***
+
+```java
+class Rumenz {
+    public static Rumenz rum;
+
+    public static void main(String[] args) {
+        Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
+        a.rum = new Rumenz(); // 这个 Rumenz 不会被回收
+        a = null;
+    }
+}
+```
+
+上面的代码中，`Rumenz a = new Rumenz();` 和 `a = null;` ，说明 `a` 一开始指向的 `Rumenz` 会被回收。
+
+代码中的 `a.rum` ，表示 `Rumenz` 类型的 `a` 的类静态属性（Class 的全局静态变量） `rum`，所以 `a.rum` 是 GC Root。
+
+所以 `a.rum = new Rumenz();` 中，`a.rum` 指向的 `Rumenz` 不会被回收。
+
+***
+
+```java
+public class Rumenz{
+    public final Rumenz r = new Rumenz(); // 这个 Rumenz 不会被回收
+
+    public static void main(String[] args){
+        Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
+        a = null;
+    }
+}
+```
+
+`public final Rumenz r = new Rumenz();` 中，`final` 常量 `r` 指向的 `Rumenz` 不会被回收。
 
 ## GC Algorithms
 
