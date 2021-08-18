@@ -96,30 +96,37 @@ public class Rumenz{
 
 ## GC Algorithms
 
-GC 常用算法：
+**GC 常用算法**
 
-* Copying（复制算法）：
-	* 步骤：
-		1. 将空间分位 2 个区域，其中一个区域存放 Objects，另一个区域为空
-		2. 扫描存放了 objects 的当前区域，将其中的 live objects 紧凑地 copy 到另一个区域，然后销毁当前区域的所有的 objects
-		3. 交替两个区域的功能角色，等待下次 GC
-	* 优点：开销比较小，没有内存碎片
-	* 缺点：需要 2 倍的内存空间，而且其中一个空间会被浪费
-	* 使用场景：Objects 的存活度较低的 Young Gen
-* Mark-Sweep（标记清除）：
-	* 步骤：
-		1. 扫描区域内的所有 objects，mark（标记）所有 live objects
-		2. 定点 sweep（清除）没有被标记的 objects
-	* 优点：不需要额外的空间
-	* 缺点：
-		* 两次扫描严重浪费时间，会产生 fragmentation（内存碎片），导致后续需要存放 Humorous Object 的时候，无法分配连续的内存空间
-		* Mark 和 Sweep 两个过程的效率都不高
-* Mark-Compact（标记压缩/标记整理）：
-	* 步骤：
-		1. Mark reachable objects（标记 live objects）
-		2. Then a compacting step relocates the marked objects towards the beginning of the heap area（将 live objects 压缩到一段连续的内存空间中）
-		3. 除了存放 live objects 的那段连续的内存空间，其余空间的 Objects 全部销毁掉
-	* 使用场景：有较多 live objects 的 Old Gen
+Copying（复制算法）：
+
+* 步骤：
+	1. 将空间分位 2 个区域，其中一个区域存放 Objects，另一个区域为空
+	2. 扫描存放了 objects 的当前区域，将其中的 live objects 紧凑地 copy 到另一个区域，然后销毁当前区域的所有的 objects
+	3. 交替两个区域的功能角色，等待下次 GC
+* 优点：开销比较小，没有内存碎片
+* 缺点：需要 2 倍的内存空间，而且其中一个空间会被浪费
+* 使用场景：Objects 的存活度较低的 Young Gen
+
+Mark-Sweep（标记清除）：
+
+* 步骤：
+	1. 扫描区域内的所有 objects，mark（标记）所有 live objects
+	2. 定点 sweep（清除）没有被标记的 objects
+* 优点：不需要额外的空间
+* 缺点：
+	* 两次扫描严重浪费时间，会产生 fragmentation（内存碎片），导致后续需要存放 Humorous Object 的时候，无法分配连续的内存空间
+	* Mark 和 Sweep 两个过程的效率都不高
+
+Mark-Compact（标记压缩/标记整理）：
+
+* 步骤：
+	1. Mark reachable objects（标记 live objects）
+	2. Then a compacting step relocates the marked objects towards the beginning of the heap area（将 live objects 压缩到一段连续的内存空间中）
+	3. 除了存放 live objects 的那段连续的内存空间，其余空间的 Objects 全部销毁掉
+* 使用场景：有较多 live objects 的 Old Gen
+
+---
 
 GC Algorithms 的简单比较：
 
@@ -147,26 +154,33 @@ JVM has these types of GC implementations:
 
 Serial：
 
-- 关键词：<u>Young Gen</u>，<u>单线程</u>，<u>复制算法</u>，<u>STW</u>，<u>配合 Serial Old 使用</u>
+- 关键词：<u>Young Gen</u>，<u>单线程</u>，<u>Copying（复制算法）</u>，<u>STW</u>，<u>配合 Serial Old 使用</u>
 - The serial collector（串行回收器） uses a single thread to perform all garbage collection work, which makes it relatively efficient because there is no communication overhead between threads.
 - It's <u>best-suited to single processor machines</u> and be useful on multiprocessors for applications with small data sets (up to approximately 100 MB). 
 - 开启：`-XX:+UseSerialGC`
 
 Serial Old：
 
-- 关键词：<u>Old Gen</u>，<u>单线程</u>，<u>标记-整理算法</u>，<u>STW</u>，<u>配合 Serial 使用</u>
+- 关键词：<u>Old Gen</u>，<u>单线程</u>，<u>Mark-Compact（标记-压缩算法）</u>，<u>STW</u>，<u>配合 Serial 使用</u>
+- Serial Old 和 Parallel Old 都是 Mark-Compact 算法，不会产生 fragment（内存碎片）
 
 ParNew：
 
-- 关键词：<u>Young Gen</u>，<u>多线程</u>，<u>复制算法</u>，<u>STW</u>，<u>配合 CMS 使用</u>
+- 关键词：<u>Young Gen</u>，<u>多线程</u>，<u>Copying（复制算法）</u>，<u>STW</u>，<u>配合 CMS 使用</u>
 - ParNew（并行）是 Serial 的多线程版，可以充分的利用CPU资源，减少回收的时间
 - 开启： `-XX:+UseParNewGC`
 
 ## Parallel Scavenge & Parallel Old
 
+Parallel Old：
+
+- 关键词：<u>Old Gen</u>，<u>多线程</u>，<u>Mark-Compact（标记压缩算法）</u>，<u>STW</u>，<u>和 Parallel Scavenge 绑定使用</u>
+- Parallel Old 是 Parallel Scavenge 的 Old Gen 版本
+- Parallel Old 和 Serial Old 都是 Mark-Compact 算法，不会产生 fragment（内存碎片）
+
 Parallel Scavenge：
 
--  关键词：<u>Young Gen</u>，<u>多线程</u>，<u>复制算法</u>，<u>STW</u>，<u>配合 Parallel Old 使用</u>
+-  关键词：<u>Young Gen</u>，<u>多线程</u>，<u>Copying（复制算法）</u>，<u>STW</u>，<u>配合 Parallel Old 使用</u>
 -  The parallel collector is also known as *throughput collector* , [because its main goal is to maximize overall throughput of the application](https://dzone.com/articles/gc-explained-parallel-collector)
 -  Parallel Scavenge 是 throughput（吞吐量）优先的回收器，高吞吐量则可以高效率地利用 CPU 时间，尽快完成程序的运算任务，主要适合在后台运算而不需要太多交互的任务
 -  The parallel collector is intended for applications with medium-sized to large-sized data sets that are <u>run on multiprocessor or multithreaded hardware</u>.
@@ -207,13 +221,6 @@ Parallel Scavenge 其他默认的参数：
 	-  Parallel compaction is a feature that enables the parallel collector to perform major collections in parallel. Without parallel compaction, major collections are performed using a single thread, which can significantly limit scalability. 
 -  默认会使用 `-XX:UseAdaptiveSizePolic` 参数，[它动态调整一些 size 参数](https://zhuanlan.zhihu.com/p/149879026)
 
----
-
-Parallel Old：
-
-- 关键词：<u>Old Gen</u>，<u>多线程</u>，<u>标记整理算法</u>，<u>STW</u>，<u>和 Parallel Scavenge 绑定使用</u>
-- Parallel Scavenge 的 Old Gen 版本，支持 JDK1.6+
-
 ## The Mostly Concurrent Collectors: CMS & G1
 
 在学习 CMS 和 G1 之前，要先了解一下 mostly concurrent 的概念。下文摘抄自官方文档 - [7 The Mostly Concurrent Collectors](https://docs.oracle.com/javase/9/gctuning/mostly-concurrent-collectors.htm#JSGCT-GUID-DFA8AF9C-F3BC-4F12-99CE-45AB6F22F15A)。
@@ -253,11 +260,13 @@ Because at least one processor is used for garbage collection during the concurr
 
 CMS（Concurrent Mark Sweep）：
 
-- 关键词：<u>Old Gen</u>，<u>标记-清除算法</u>，<u>配合 PawNew 使用</u>
+- 关键词：<u>Old Gen</u>，<u>Mark-Sweep（标记-清除算法）</u>，<u>配合 PawNew 使用</u>
 - This collector is for applications that prefer shorter garbage collection pauses and can afford to share processor resources with the garbage collection.
 - Simply put, applications using this type of GC respond slower on average but do not stop responding to perform garbage collection.
 - 极大的降低 STW 的时间，主要用于服务端
-- 特点是<u>并发标记清除（CMS，Concurrent Mark Sweep）</u>，一种以获取最短回收停顿时间为目标的回收器
+- 特点是<u>并发标记清除（CMS，Concurrent Mark Sweep）</u>，可以获取最短回收停顿时间（Shorter GC Pause）
+
+**Mark-Sweep 只会清理标记了的对象，所以可以实现多线程并发清理，而不会 STW。这种方法可以缩短 GC Pause，但是会有产生 fragment（内存碎片）**
 
 Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 
@@ -307,7 +316,7 @@ G1 有 STW 和并发多线程的运作方式：
 
 G1 is <u>not a real-time collector</u>. It tries to meet set pause-time targets with high probability over a longer time, but not always with absolute certainty for a given pause.
 
-
+## Usage Scenarios
 
 G1 garbage collector is <u>targeted for multiprocessor machines with a large amount of memory</u>.  It attempts to meet garbage collection pause-time goals with high probability while achieving high throughput with little need for configuration. 
 
@@ -320,9 +329,11 @@ G1 aims to provide the best balance between latency and throughput using current
 
 ~~The G1 collector achieves high performance and tries to meet pause-time goals in several ways described in the following sections.~~
 
-## Heap Layout
+## Heap Layout & Region
 
-**G1 partitions the heap into a set of equally sized heap regions, each a contiguous range of virtual memory** as shown in Figure 9-1.
+**G1 partitions the heap into a set of equally sized heap regions, each a contiguous range of virtual memory** as shown in Figure 9-1. 
+
+**G1 将 Heap 划分为大约 2000 个 regions，每个 regions 的大小是 1MB 到 32MB（必须是 2 的幂次方大小）**。
 
 ![Figure 9-1 G1 Garbage Collector Heap Layout](https://docs.oracle.com/javase/9/gctuning/img/jsgct_dt_004_grbg_frst_hp.png)
 
@@ -346,7 +357,14 @@ G1 aims to provide the best balance between latency and throughput using current
 
 The Young Generation contains Eden regions and Survivor regions. These regions provide the same function as the respective contiguous spaces in other collectors, with the difference that in G1 these regions are typically <u>laid out in a noncontiguous pattern in memory</u>. Old regions make up the old generation. <u>Old generation regions may be **humongous** for objects that span multiple regions</u>.
 
+**每个 regions 都可以作为 Young Gen（Eden + Survivor）和 Old Gen。**
+
 An application always allocates into a young generation, that is, eden regions, with the exception of humongous, objects that are directly allocated as belonging to the old generation.
+
+**Humongous objects 只能被存入 Old Gen，存储 Humongous Objects 的 region 被称为 Humongous Region**:
+
+- **当 Object 大于等于 Region 大小的一半时，被视为 Humongous Object**
+- **如果某个 Humongous Object 比一个 region 的 size 还要大，就会申请多个连续的 regions 来存放该 Humongous Object**
 
 G1 garbage collection pauses can reclaim space in the young generation as a whole, and any additional set of old generation regions at any collection pause. 
 
