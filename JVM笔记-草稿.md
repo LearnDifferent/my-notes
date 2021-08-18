@@ -174,15 +174,6 @@ Metaspace 的大小可以使用 **参数 `-XX:MetaspaceSize` 和 `-XX:MaxMetaspa
 
 如果 Metaspace 发生溢出，JVM 会抛出异常`OutOfMemoryError:Metaspace` 
 
-### 草稿
-
-作用：存储加载类信息（以 .class / 类对象的形式）、常量、静态变量、JIT 编译后的代码等数据
-
-GC 垃圾回收的效率低：
-
-1. 要等类对象的所有实例对象都被回收后，才能回收该类对象
-2. 只要该类对象还有被引用，就不能被回收
-
 
 
 ## 堆内存 Java Heap
@@ -289,31 +280,6 @@ public class ObjectTest {
 > 如果想早点触发 OOM 的话，可以在 IDEA 中添加 VM Option `-Xms2m -Xmx8m` 后再运行。
 
 如果想让这个 Java 程序，在触发 OOM 后，生成一个 Heap 信息，可以继续添加 `-XX:+HeapDumpOnOutOfMemoryError` 参数。当 OOM 后，会生成一个类似 `java_pid1234.hprof` 的文件，可以在 IDEA 双击打开，IDEA 会使用自带的 Profiler 来分析该文件也可以使用其他的工具打开改文件，可以参考[A Guide to Java Profilers](https://www.baeldung.com/java-profilers)。
-
-### 草稿
-
-> 栈主要管运行，堆主要管存储对象
-
-* **Heap** 主要**存储对象**
-* **Stack** 存储的主要是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
-* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
-    * JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
-    * 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
-
-例子：User u = new User();
-
-* `new` 关键字会在 Heap 中创建新的 User 对象
-* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息（也就是 *存放地址* ），会指向 Heap 中的 User 对象
-
-堆内存也是被线程共享的。
-
-* 堆的定义：
-    * Student stu = new Student();
-    * new Student() 为 *Heap / 堆*，是被引用到部分
-        * Stack 引用 Heap / Stack -> Heap
-* 作用：存放对象实例 Instance。几乎所有的对象、数组都存在这里。
-
-> 详细请看 GC 部分的
 
 # 线程独占部分
 
@@ -471,95 +437,6 @@ The `class` file code for a method refers to methods to be invoked and variables
 
 This late binding of the methods and variables makes changes in other classes that a method uses less likely to break this code.
 
-### 摘抄和草稿
-
-摘抄：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
-
-Java Virtual Machine Stacks・
-
-> For every thread, JVM creates a separate stack at the time of thread creation. The memory for a Java Virtual Machine stack does not need to be contiguous. The Java virtual machine only performs two operations directly on Java Stacks: it pushes and pops frames. And stack for a particular thread may be termed as *Run – Time Stack*.
->
-> Each and every method call performed by that thread is stored in the corresponding *run time stack* including parameters, local variables, intermediate computations, and other data.
->
-> After completing a method, corresponding entry from the stack is removed. After completing all method calls the stack becomes empty and that empty stack is destroyed by the JVM just before terminating the thread.
->
-> The data stored in the stack is available for the corresponding thread and not available to the remaining threads. Hence we can say local data is thread safe. Each entry in the stack is called *Stack Frame* or Activation Record.
-
-![](https://media.geeksforgeeks.org/wp-content/uploads/JVM.jpg)
-
-Stack Frame Structure
-
-> The stack frame basically consists of three parts: Local Variable Array, Operand Stack & Frame Data.
->
-> When JVM invokes a Java method, first it checks the class data to determine the number of words (size of the local variable array and operand stack, which are measured in words for each individual method) required by the method in the local variables array and operand stack. It creates a stack frame of the proper size for invoked method and pushes it onto the Java stack.
-
-1. 局部变量表 Local Variable Table/Array (LVA):
-    * The local variables part of stack frame is organized as a zero-based array of words.
-    * It contains all parameters and local variables of the method.
-    * 包含了<u>**本地变量（Local Variables/Vars）、输入参数和输出参数（Parameters）以及方法内的变量**</u>
-2. 栈操作 Operand Stack (OS):
-    * JVM uses operand stack as work space like rough work or we can say for storing intermediate calculation’s result.
-    * Operand stack is organized as array of words like local variable array. But this is not accessed by using index like local variable array rather it is accessed by some instructions that can push the value to the operand stack and some instructions that can pop values from operand stack and some instructions that can perform required operations.
-    * **记录出栈、入栈的操作**
-3. 栈帧数据 Frame Data (FD):
-    * It contains all symbolic reference (constant pool resolution) and normal method return related to that particular method.
-    * It also contains a reference to Exception table which provide the corresponding catch block information in the case of exceptions.
-
-***
-
-下面的是草稿，等待整理……
-
-一些名词：栈帧结构、方法索引（method index）、输入输出参数（Parameters）、本地变量（Local vars）、类（Class）、父帧（Return Frame）、子帧（Next Frame）
-
-> 栈分为<u>栈顶</u>和<u>栈底</u>，每一个栈压住的程序正在执行的方法。
-
-> 栈帧：是一个内存区块，是一个数据集，是一个有关方法和运行期数据集
-
-> 如果栈满了，就会出现 StackOverflowError。
-
-栈 + 堆 + 方法区的交互关系：
-
-* 栈帧里面的引用，指向了堆里面的对象具体实例
-* 对象具体实例里面的`final`常量，指向方法区
-
-知识点：
-
-* 栈 Stack：
-
-    * 定义：我们编写的每一个 method 都会放到 Stack 里面运行
-    * Student stu = new Student();
-    * stu 为 *Stack / 栈*，是会被执行操作的部分
-        * Stack 引用 Heap / Stack -> Heap
-    * 平时说的 Stack 指的就是 Java Virtual Machine Stacks（JVM Stacks）
-
-* 栈帧 Stack Frame：
-
-    * 在 Stack 内，表示被执行的一个方法。
-    * 如果该 Stack Frame 调用了另外一个方法，就会生成新的 Stack Frame。
-    * 以此类推，所有 Stack Frame 就会像 stack 一样，先进后出（最后被调用的方法，最先被执行）。
-
-* 局部变量表 Local Variable Table 与栈帧 Stack Frame：
-
-    * 当一个方法被执行时，会生成一个 Stack Frame，这个 Stack Frame 会生成一个 Local Variable Table，把所有的 Local Variable 压缩进来。
-    * 这就是局部变量 Local Variable 也属于栈内到原因
-
-* 操作数栈 Operand Stack 与栈帧 Stack Frame：
-
-    * [当一个方法刚刚开始执行时，其操作数栈是空的，随着方法执行和字节码指令的执行，会从局部变量表或对象实例的字段中复制常量或变量写入到操作数栈，再随着计算的进行将栈中元素出栈到局部变量表或者返回给方法调用者，也就是出栈/入栈操作。一个完整的方法执行期间往往包含多个这样出栈/入栈的过程。](https://zhuanlan.zhihu.com/p/45354152)
-    * [操作数栈(Operand Stack)也常称为操作栈，它是一个后入先出栈(LIFO)。同局部变量表一样，操作数栈的最大深度也在编译的时候写入到方法的Code属性的max_stacks数据项中。操作数栈的每一个元素可以是任意Java数据类型，32位的数据类型占一个栈容量，64位的数据类型占2个栈容量,且在方法执行的任意时刻，操作数栈的深度都不会超过max_stacks中设置的最大值。](https://zhuanlan.zhihu.com/p/45354152)
-    * [**The operand stack is used during the execution of byte code instructions** in a similar way that general-purpose registers are used in a native CPU. Most JVM byte code spends its time manipulating the operand stack by pushing, popping, duplicating, swapping, or executing operations that produce or consume values. Therefore, instructions that move values between the array of local variables and the operand stack are very frequent in byte code. For example, a simple variable initialization results in two byte codes that interact with the operand stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
-
-* 动态引用 Dynamic Linking 与栈帧 Stack Frame：
-
-    * 动态引用：存在于 Stack Frame 内，用于找到方法区 Method Area / Metaspace 里面的方法代码
-
-* Return Address（返回值地址、方法出口）  与栈帧 Stack Frame：
-
-    * 一个 Stack Frame /运行的方法在结束后，会得到一个值，这个值要返回到之前的方法内：
-        * main 方法的 Stack Frame 里面有一个 int result = calculate();
-        * 此时会生成 calculate() 方法的 Stack Frame，然后优先计算出结果。这个结果需要返回到 main 方法内，赋值给 main 方法的 int result
-    * Return Address 就是在 Stack Frame 划出一块区域，用于储存需要 return 的前一个 stack 的内存地址
-
 ## 程序计数器 Program Counter Register
 
 If the thread is executing a Java method (not a native method), <u>the value of the pc register indicates the next instruction to execute</u>. 
@@ -610,7 +487,123 @@ Native Method Stack 是存放 JVM 底层的调用 C 和 C++ 实现的 native 方
 
 
 
-# 草稿 - 对比 JVM Stack 和 Heap
+# 草稿
+
+## Stack
+
+摘抄：[Java Virtual Machine (JVM) Stack Area](https://www.geeksforgeeks.org/java-virtual-machine-jvm-stack-area/)
+
+Java Virtual Machine Stacks・
+
+> For every thread, JVM creates a separate stack at the time of thread creation. The memory for a Java Virtual Machine stack does not need to be contiguous. The Java virtual machine only performs two operations directly on Java Stacks: it pushes and pops frames. And stack for a particular thread may be termed as *Run – Time Stack*.
+>
+> Each and every method call performed by that thread is stored in the corresponding *run time stack* including parameters, local variables, intermediate computations, and other data.
+>
+> After completing a method, corresponding entry from the stack is removed. After completing all method calls the stack becomes empty and that empty stack is destroyed by the JVM just before terminating the thread.
+>
+> The data stored in the stack is available for the corresponding thread and not available to the remaining threads. Hence we can say local data is thread safe. Each entry in the stack is called *Stack Frame* or Activation Record.
+
+![](https://media.geeksforgeeks.org/wp-content/uploads/JVM.jpg)
+
+Stack Frame Structure
+
+> The stack frame basically consists of three parts: Local Variable Array, Operand Stack & Frame Data.
+>
+> When JVM invokes a Java method, first it checks the class data to determine the number of words (size of the local variable array and operand stack, which are measured in words for each individual method) required by the method in the local variables array and operand stack. It creates a stack frame of the proper size for invoked method and pushes it onto the Java stack.
+
+1. 局部变量表 Local Variable Table/Array (LVA):
+	* The local variables part of stack frame is organized as a zero-based array of words.
+	* It contains all parameters and local variables of the method.
+	* 包含了<u>**本地变量（Local Variables/Vars）、输入参数和输出参数（Parameters）以及方法内的变量**</u>
+2. 栈操作 Operand Stack (OS):
+	* JVM uses operand stack as work space like rough work or we can say for storing intermediate calculation’s result.
+	* Operand stack is organized as array of words like local variable array. But this is not accessed by using index like local variable array rather it is accessed by some instructions that can push the value to the operand stack and some instructions that can pop values from operand stack and some instructions that can perform required operations.
+	* **记录出栈、入栈的操作**
+3. 栈帧数据 Frame Data (FD):
+	* It contains all symbolic reference (constant pool resolution) and normal method return related to that particular method.
+	* It also contains a reference to Exception table which provide the corresponding catch block information in the case of exceptions.
+
+***
+
+下面的是草稿，等待整理……
+
+一些名词：栈帧结构、方法索引（method index）、输入输出参数（Parameters）、本地变量（Local vars）、类（Class）、父帧（Return Frame）、子帧（Next Frame）
+
+> 栈分为<u>栈顶</u>和<u>栈底</u>，每一个栈压住的程序正在执行的方法。
+
+> 栈帧：是一个内存区块，是一个数据集，是一个有关方法和运行期数据集
+
+> 如果栈满了，就会出现 StackOverflowError。
+
+栈 + 堆 + 方法区的交互关系：
+
+* 栈帧里面的引用，指向了堆里面的对象具体实例
+* 对象具体实例里面的`final`常量，指向方法区
+
+知识点：
+
+* 栈 Stack：
+
+	* 定义：我们编写的每一个 method 都会放到 Stack 里面运行
+	* Student stu = new Student();
+	* stu 为 *Stack / 栈*，是会被执行操作的部分
+		* Stack 引用 Heap / Stack -> Heap
+	* 平时说的 Stack 指的就是 Java Virtual Machine Stacks（JVM Stacks）
+
+* 栈帧 Stack Frame：
+
+	* 在 Stack 内，表示被执行的一个方法。
+	* 如果该 Stack Frame 调用了另外一个方法，就会生成新的 Stack Frame。
+	* 以此类推，所有 Stack Frame 就会像 stack 一样，先进后出（最后被调用的方法，最先被执行）。
+
+* 局部变量表 Local Variable Table 与栈帧 Stack Frame：
+
+	* 当一个方法被执行时，会生成一个 Stack Frame，这个 Stack Frame 会生成一个 Local Variable Table，把所有的 Local Variable 压缩进来。
+	* 这就是局部变量 Local Variable 也属于栈内到原因
+
+* 操作数栈 Operand Stack 与栈帧 Stack Frame：
+
+	* [当一个方法刚刚开始执行时，其操作数栈是空的，随着方法执行和字节码指令的执行，会从局部变量表或对象实例的字段中复制常量或变量写入到操作数栈，再随着计算的进行将栈中元素出栈到局部变量表或者返回给方法调用者，也就是出栈/入栈操作。一个完整的方法执行期间往往包含多个这样出栈/入栈的过程。](https://zhuanlan.zhihu.com/p/45354152)
+	* [操作数栈(Operand Stack)也常称为操作栈，它是一个后入先出栈(LIFO)。同局部变量表一样，操作数栈的最大深度也在编译的时候写入到方法的Code属性的max_stacks数据项中。操作数栈的每一个元素可以是任意Java数据类型，32位的数据类型占一个栈容量，64位的数据类型占2个栈容量,且在方法执行的任意时刻，操作数栈的深度都不会超过max_stacks中设置的最大值。](https://zhuanlan.zhihu.com/p/45354152)
+	* [**The operand stack is used during the execution of byte code instructions** in a similar way that general-purpose registers are used in a native CPU. Most JVM byte code spends its time manipulating the operand stack by pushing, popping, duplicating, swapping, or executing operations that produce or consume values. Therefore, instructions that move values between the array of local variables and the operand stack are very frequent in byte code. For example, a simple variable initialization results in two byte codes that interact with the operand stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
+
+* 动态引用 Dynamic Linking 与栈帧 Stack Frame：
+
+	* 动态引用：存在于 Stack Frame 内，用于找到方法区 Method Area / Metaspace 里面的方法代码
+
+* Return Address（返回值地址、方法出口）  与栈帧 Stack Frame：
+
+	* 一个 Stack Frame /运行的方法在结束后，会得到一个值，这个值要返回到之前的方法内：
+		* main 方法的 Stack Frame 里面有一个 int result = calculate();
+		* 此时会生成 calculate() 方法的 Stack Frame，然后优先计算出结果。这个结果需要返回到 main 方法内，赋值给 main 方法的 int result
+	* Return Address 就是在 Stack Frame 划出一块区域，用于储存需要 return 的前一个 stack 的内存地址
+
+## Heap
+
+> 栈主要管运行，堆主要管存储对象
+
+* **Heap** 主要**存储对象**
+* **Stack** 存储的主要是**对象的引用类型**，也就是**对象的地址**，最终要指向 Heap 实际存在的对象
+* 注意！JDK 6 之后，JVM 通过逃逸分析（エスケープ解析/Escape analysis），发现一个对象在声明之后，只有在它当前运行的函数中调用：
+	* JVM 就会在 **Stack** 上申请空间放置这个对象，而不是 **Heap** 上
+	* 函数执行完毕后，会直接清理这个对象，这样可以减轻 GC 的压力
+
+例子：User u = new User();
+
+* `new` 关键字会在 Heap 中创建新的 User 对象
+* `u` 则会在 Stack 上创建引用（Reference），该引用内的地址信息（也就是 *存放地址* ），会指向 Heap 中的 User 对象
+
+堆内存也是被线程共享的。
+
+* 堆的定义：
+	* Student stu = new Student();
+	* new Student() 为 *Heap / 堆*，是被引用到部分
+		* Stack 引用 Heap / Stack -> Heap
+* 作用：存放对象实例 Instance。几乎所有的对象、数组都存在这里。
+
+> 详细请看 GC 部分的
+
+## 对比 JVM Stack 和 Heap
 
 Stack 主要管运行，Heap 主要管存储。
 
@@ -634,8 +627,6 @@ Stack 存放的内容和程序运行相关，主要存储函数运行过程中�
 * 线程结束的时候，栈内存也就释放了（注意，main 也是一个进程）
 * 首先在 Stack 内压入 main 方法，然后压入方法（比如 `test()`）
 * 在取出来的过程中，如果 main 方法也被取出来，stack 空了之后，程序就结束了
-
-# 草稿 - 知识点
 
 ## JVM 的位置
 
@@ -703,7 +694,7 @@ ClassLoader 的作用：
 2. BEA 的 JRockit
 3. IBM 的 J9 VM
 
-# 草稿 - GC
+## GC
 
 > GC 的作用区域只有方法区和堆
 >
@@ -775,7 +766,7 @@ JDK 8 之前堆内存中分为三个区域：
 `-XX:+PrintGCDetails`：打印 GC 垃圾回收信息
 `-XX:+HeapDumpOnOutOfMemoryError`：OOM Dump
 
-# 草稿 - JMM / Java memory model
+## JMM / Java memory model
 
 Java 内存模型
 
