@@ -592,9 +592,17 @@ If the thread is executing a Java method (not a native method), <u>the value of 
 
 ## 本地方法栈 Native Method Stack
 
-存放 JVM 底层的 C 和 C++ 等语言实现的 Java 方法。
+Native Method Stack 是存放 JVM 底层的调用 C 和 C++ 实现的 native 方法的区域。
 
-这些 native 方法也需要内存空间，所以在调用到这些方法的时候，JVM 也会腾出一块 Native Method Stack 给这些方法。
+这些 native 方法也需要内存空间，所以在调用到这些方法的时候，JVM 会腾出一块 Native Method Stack 给这些方法。
+
+只要带了 `native` 关键字，说明 Java 超过了 Java 的作用范围，会进入 Native Method Stack（本地方法栈），然后调用 JNI。
+
+ JNI：
+
+- Java Native Interface / 本地方法接口
+- 用于登记 native 方法
+- 在执行的时候，通过 JNI，加载本地方法库中的方法
 
 > [Not all JVMs support native methods, however, those that do typically create a per thread native method stack.](https://app.yinxiang.com/shard/s72/nl/16998849/6c2c243c-cb85-491a-839b-09be980d50e2/)
 
@@ -687,12 +695,7 @@ ClassLoader 的作用：
 - 安全管理器/security manager：实现权限控制，比 access controller 优先级高
 - 安全软件包/security package： java.security 下的类和扩张包下的类，允许用户为应用增加新的安全特性
 
-## Native
 
-只要带了 `native` 关键字，说明 Java 超过了 Java 的作用范围，会进入本地方法栈/`Native Method Stack`，然后调用本地方法接口/JNI（Java Native Interface）
-- Native Method Stack 是 Java 专门开辟一块调用 C 和 C++ 的区域
-- 用于登记 native 方法
-- 在执行的时候，通过 JNI，加载本地方法库中的方法
 
 ## 三种 JVM
 
@@ -757,120 +760,6 @@ JDK 8 之前堆内存中分为三个区域：
 1. 用参数调优，扩大堆内存查看结果
 2. 分析内存，看一下哪个地方有问题（需要使用专业工具）
 
-## GC 基础
-
-GC 过程：
-
-在 Young Generation Space 中，当 Eden Space 快满的时候，会触发 Young GC。
-
-首先会在 Eden Space 中，将要删除的对象做上标记，没有被标记的对象就转移到 Survivor Space 中（S0 或 S1 都有可能）。
-
-> *S0* : *S1* : *Eden Space* = 1:1:8
-
-假设不需要删除的对象，全部转移到了 S0 后，就会将 S1 和 Eden Space 的所有对象清除。
-
-等下一次 Eden Space 快满的时候，会将 S0 和 Eden Space 的中不需要删除的对象，转移到 S1，然后将 S0 和 Eden Space 删除。
-
-也就是「S0 + Eden」「S1 + Eden」这样循环清理。
-
-如果某个对象在一次 Young GC 之后仍然存活，JVM will increment the reachable object's age by 1，等某个对象的 age 达到 15 之后，该对象 will be moved to the tenured space（也就是 Old Generation Space）。This process is called “premature promotion”
-
-> -XX:MaxTenuringThreshold 可以用来设定 age 达到多少后，转移到 Old Generation Space（Tenured Space），默认 age 为 15
-
-Tenured Space 除了存储 age 达到 15 的对象之外，还存储「大对象」。大对象类似于长度为 99999999 的数组。
-
-如果 Old Generation Space（Tenured Space）也满了，就会触发 Full GC。
-
-Full GC 会采用 **标记清除法**，而 Minor GC 采用的是 **复制算法**。
-
-***
-
-> 内存中已经不再被使用到的空间就是垃圾
-> 也就是，没有引用指向的对象，就是垃圾
-
-GC Roots：
-
-* GC Roots 是指一组必须活跃的引用。
-* 使用 GC Roots /“可达性分析算法”来判断对象是否存活，只要 GC Roots 能找到该对象，就说明存活，反之则不存活。
-
-GC Roots 基本思路：
-
-* 通过一系列名为「GCRoots」的对象作为起始点，从这个被称为 GC Roots 的对象开始向下搜索，如果一个对象到 GC Roots 没有任何引用链相连时，则说明此对象不可用
-* 也即给定一个集合的引用作为根出发，通过引用关系遍历对象图，能被遍历到的（可到达的）对象就被判定为存活，没有被遍历到的就自然被判定为死亡
-* 更多 GC Roots 内容，参考[JVM之GCRoots概述](https://blog.csdn.net/weixin_41910694/article/details/90706652)
-
-![](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/d053c7d6f7724a11a32ecda6c7104b2e~tplv-k3u1fbpfcp-zoom-1.image)
-
-Java 中可以作为 GC Roots 的对象（注意，这些对象不会被回收）：
-
-* 虚拟机栈（栈帧中的本地变量表）中引用的对象
-* 方法区中类静态属性引用的对象
-* 方法区中常量引用的对象
-* 本地方法栈中JNI（也就是 Native 方法）引用的对象
-
-示例（参考：[什么是GC Roots](https://www.cnblogs.com/rumenz/articles/14099927.html)）：
-
-虚拟机栈中引用的对象：
-
-```java
-public class Rumenz{
-    public static void main(String[] args) {
-        Rumenz a = new Rumenz();
-        a = null;
-    }
-}
-```
-
-a 是栈帧中的本地变量，a 就是 GC Root。
-
-由于 a=null，a 与 new Rumenz() 对象断开了链接，所以该对象会被回收。
-
-***
-
-方法区类的静态成员引用的对象：
-
-```java
-public class Rumenz{
-    public static Rumenz = r;
-    public static void main(String[] args){
-       Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
-       a.r = new Rumenz(); // 这个 Rumenz 不会被回收
-       a = null;
-    }
-}
-```
-
-栈帧中的本地变量 a = null，由于 a 断开了与 GC Root 对象（a对象）的联系，所以 a 对象会被回收。
-
-由于给 Rumenz 的成员变量 r 赋值了变量的引用，并且 r 成员变量是静态的,所以 r 就是一个 GC Root 对象，所以 r 指向的对象不会被回收。
-
-***
-
-方法区常量引用的对象：
-
-```java
-public class Rumenz{
-    public static final Rumenz r = new Rumenz(); // 这个 Rumenz 不会被回收
-
-    public static void main(String[] args){
-       Rumenz a = new Rumenz(); // 这个 Rumenz 会被回收
-       a = null;
-    }
-}
-```
-
-常量 r 引用的对象，不会因为 a 引用的对象的回收而被回收。
-
-***
-
-本地方法栈中 JNI（Native 方法）引用的对象：
-
-本地方法就是一个 Java 调用非 Java 代码的接口，该方法并非 Java 实现的，可能由 C 或 C++ 等其他语言实现的。Java 通过 JNI 来调用本地方法，而本地方法是以库文件的形式存放的（在 WINDOWS 平台上是 DLL 文件形式，在 UNIX 机器上是 SO 文件形式）。
-
-通过调用本地的库文件的内部方法，使 Java 可以实现和本地机器的紧密联系，调用系统级的各接口方法。
-
-当调用 Java 方法时，虚拟机会创建一个 Stack Frame 并压入 Java 栈，而**当调用本地方法时，虚拟机会保持 Java 栈不变，不会压入新的 Stack Frame，虚拟机只是简单地动态连接并直接调用指定的本地方法**。
-
 ## 使用 JProfiler
 
 如果一个项目出现 OOM 故障：
@@ -886,7 +775,71 @@ public class Rumenz{
 `-XX:+PrintGCDetails`：打印 GC 垃圾回收信息
 `-XX:+HeapDumpOnOutOfMemoryError`：OOM Dump
 
+## GC 算法
 
+GC 常用算法：
+
+* 标记清除法
+* 标记整理法/标记压缩
+* 复制算法
+* 引用计数器（一般不用）
+
+### 复制算法
+
+简单来说，就是**先标记一个区域内的所有对象，是否需要被删除，等一个区域快满了之后，把不需要删除的对象，紧凑地复制到另一个区域中**，这样的做法开销比较小，但是需要 2 倍的内存空间。
+
+谁空，谁是 to：幸存 0 区和 1 区，谁是空的，谁就是 to。0 和 1 区会相互交替。
+
+* 每次 GC 都会将伊甸园区活着的对象，移到幸存区中
+* 一旦伊甸园区被 GC 后就是空的
+
+当对象在伊甸园区中存活，就会跑去幸存区，当对象跑去 0 区时，1 区就是空的，所以 1 区就是 to。
+
+如果两个区都有 1 个对象，那么首先会将其中一个区内的对象移到另一个区，然后移空的区域就是 to 区，有 2 个对象的就是 from 区
+
+默认当一个对象经历了 15 次 GC 后还没有死，就进入养老区。可以使用 `-XX:MaxTenuringThreshlod=5`，让对象在经历 5 次 GC 后还没死亡的情况下进入养老区
+
+每次 GC，伊甸园区和 to 区都是空的，对象都在 from 区内（在没有存放对象前，from 区叫做 to 区）
+
+主要用于伊甸园和幸存。
+
+* 好处：没有内存的碎片
+* 坏处：浪费了一个幸存区的内存空间（to 区永远是空的）。最极端的情况下就是对象永久存活。
+
+复制算法最佳使用场景是对象存活度较低的时候，也就是在新生区内。
+
+### 标记清除法
+
+扫描对象，对活着的对象进行标记，然后清除没有被标记的对象
+
+优点：不需要额外的空间
+缺点：两次扫描严重浪费时间，会产生内存碎片（假设在内存空间上有 3 个连续的对象。其中两个存活的对象之间，如果有一个死亡对象被清除了，那个死亡对象留下的内存空间就变成了碎片，使得内存不连续）
+
+### 标记压缩
+
+对「标记清除法」对优化。
+
+压缩：防止内存碎片的产生，让内存空间有连续性。
+
+压缩就是再一次扫描，让存活对象移动到同一侧
+
+缺点，多了一个移动成本
+
+所以可以等清除几次之后，再统一压缩
+
+### GC 算法总结
+
+内存效率/时间复杂度：复制算法> 标记清除算法> 标记压缩算法
+
+内存整齐度：复制算法=标记压缩算法> 标记清除法
+
+内存利用率：标记压缩算法=标记清除算法>复制算法
+
+没有最好的算法，只有最合适的算法。所以 GC 也叫分代收集算法。
+
+年轻代：存活率低，所以使用复制算法
+
+老年代：存活率高，区域大，所以使用标记清除+标记压缩混合实现（调优就在这里）
 
 # 草稿 - JMM / Java memory model
 
