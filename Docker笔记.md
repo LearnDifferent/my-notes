@@ -338,6 +338,7 @@ volume 方式 - 自定义后，启动的时候挂载（推荐）
 * `docker volume ls` 查看所有
 * `docker inspect [数据卷名称]` 或 `docker volume inspect [数据卷名称]` 查看改数据卷信息
 * `docker volume rm ...` 删除
+* `docker volume prune` 清理所有数据卷
 
 Dockerfile 中的 VOLUME：
 
@@ -714,10 +715,24 @@ docker-compose restart [服务名...可以有多个，如果不写就是全部]
 docker-compose stop [服务名...可以有多个，如果不写就是全部]
 ```
 
-删除容器中的服务，`-f` 表示强制删除，`-v` 表示只删除数据卷（一般不要使用）：
+# 清理 Docker
+
+查看 Docker 的磁盘使用情况：
 
 ```bash
-docker-compose -f [服务名...]
-docker-compose -v [服务名...]
-docker-compose -fv [服务名...]
+docker system df
 ```
+
+清理磁盘相关数据：
+
+```bash
+docker system prune
+docker system prune -a
+```
+
+清理数据卷：
+
+```bash
+docker volume prune
+```
+
