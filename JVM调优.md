@@ -1,4 +1,4 @@
-# Garbage Collection
+#  Garbage Collection
 
 ## GC Basics
 
@@ -21,6 +21,8 @@ In Java, process of deallocating memory is handled automatically by the garbage 
 参考资料：[Java Garbage Collection Basics](https://www.oracle.com/technetwork/tutorials/tutorials-1873457.html)
 
 ## GC Roots
+
+> An object is considered garbage and its memory can be reused by the VM when it can no longer be reached from any reference of any other live object in the running program.
 
 GC Roots：
 
@@ -138,15 +140,63 @@ Generational Collection：
 - Young Gen：Objects 存活率低，所以 live objects 比较少，使用高效的 Copying 所需要的“复制对象”的成本，就会相应降低
 - Old Gen：Objects 存活率高，而且因为本身占据的空间就很大了，没有额外的空间去完成 Copying，所以混合使用 Mark-Sweep + Mark-Compact（所以，这里也是调优的重点）
 
+## Throughput, Latency and GC Pause
 
+The primary measures of garbage collection are throughput and latency.
+
+- **Throughput** is the percentage of total time not spent in garbage collection considered over long periods of time. Throughput includes time spent in allocation (but tuning for speed of allocation generally isn't needed).
+- **Latency** is the responsiveness of an application. Garbage collection pauses affect the responsiveness of applications.
+
+Throughput：
+
+- [スループット](https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AB%E3%83%BC%E3%83%97%E3%83%83%E3%83%88)（実効伝送速度）は、一般に単位時間当たりの処理能力のこと
+- Throughput 指 <u>application threads 的用时</u> 占据 <u>程序总用时</u> 的比例
+- 比如：<u>Throughput 为 99% 表示程序运行了 100  秒，而 application threads 运行了 99 秒，GC 线程运行运行了 1 秒</u>
+- [high throughput](https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tune_app_thruput.html) means that more transactions are executed during a given amount of time. You can also measure the throughput by measuring how long it takes to perform a specific task or calculation.
+
+[High Throughput VS Shorter GC Pause](https://zhuanlan.zhihu.com/p/100265755) ：
+
+- High Throughput 的好处让资源最大限度地用于“生产性工作”
+- Shorter GC Pause 可以提高客户端的用户体验，缩短因为 application threads 而造成的停顿时间
+- 每次启动并运行 GC 线程的时候，都非常消耗 CPU 资源，所以<u>想要实现 High Throughput，就要减少 GC 的次数</u>
+- 如果<u>减少了 GC 的次数，就会让每次 GC 的工作量增大，由此造成更长时间的 GC Pause</u>
+- 所以，想要<u>实现 Shorter GC Pause，需要增加 GC 的次数，让每个 GC 的工作量降低，从而让每次的 GC 都能更快完成任务</u>，减少 GC Pause 的时间
+
+> Users have different requirements of garbage collection. For example, some consider the right metric for a web server to be throughput because pauses during garbage collection may be tolerable or simply obscured by network latencies. However, in an interactive graphics program, even short pauses may negatively affect the user experience.
 
 # JVM Garbage Collectors
 
-主要参考资料：
+Garbage Collectors 部分主要参考资料：
 
 - [JVM Garbage Collectors](https://www.baeldung.com/jvm-garbage-collectors) 
 - [Java Platform, Standard Edition HotSpot Virtual Machine Garbage Collection Tuning Guide](https://docs.oracle.com/javase/9/gctuning/toc.htm)
+- [HotSpot Virtual Machine Garbage Collection Tuning Guide](https://docs.oracle.com/en/java/javase/12/gctuning/index.html)
 - [【java】垃圾收集器|g1收集器](https://www.bilibili.com/video/BV13J411g7A1) 和 [java_jvm垃圾收集器.md](https://github.com/sunwu51/notebook/blob/master/19.09/java_jvm%E5%9E%83%E5%9C%BE%E6%94%B6%E9%9B%86%E5%99%A8.md)
+- [ガベージファースト・ガベージ・コレクタ](https://docs.oracle.com/javase/jp/8/docs/technotes/guides/vm/gctuning/g1_gc.html)
+- [ガベージファースト・ガベージ・コレクタのチューニング](https://docs.oracle.com/javase/jp/8/docs/technotes/guides/vm/gctuning/g1_gc_tuning.html)
+
+---
+
+**What Is a Garbage Collector?**
+
+The garbage collector (GC) automatically <u>manages the application's dynamic memory allocation requests</u>.
+
+A garbage collector performs automatic dynamic memory management through the following operations:
+
+- Allocates from and gives back memory to the operating system.
+- Hands out that memory to the application as it requests it.
+- Determines which parts of that memory is still in use by the application.
+- Reclaims the unused memory for reuse by the application.
+
+The Java HotSpot garbage collectors employ various techniques to improve the efficiency of these operations:
+
+- Use generational scavenging in conjunction with aging to concentrate their efforts on areas in the heap that most likely contain a lot of reclaimable memory areas.
+- Use multiple threads to aggressively make operations parallel, or perform some long-running operations in the background concurrent to the application.
+- Try to recover larger contiguous free memory by compacting live objects.
+
+> 更多相关：[Why Does the Choice of Garbage Collector Matter?](https://docs.oracle.com/en/java/javase/12/gctuning/introduction-garbage-collection-tuning.html#GUID-A48F272E-A6C1-45A0-9A8B-6D5790EB454C)
+
+
 
 JVM has these types of GC implementations:
 
@@ -186,21 +236,6 @@ Parallel Scavenge：
 -  The parallel collector is intended for applications with medium-sized to large-sized data sets that are <u>run on multiprocessor or multithreaded hardware</u>.
 -  The numbers of garbage collector threads can be controlled with `-XX:ParallelGCThreads`
 -  You can enable Parallel Scavenge Collector by using the `-XX:+UseParallelGC` option.
-
-关于 Throughput：
-
-- [スループット](https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AB%E3%83%BC%E3%83%97%E3%83%83%E3%83%88)（実効伝送速度）は、一般に単位時間当たりの処理能力のこと
-- Throughput 指 <u>application threads 的用时</u> 占据 <u>程序总用时</u> 的比例
-- 比如：<u>Throughput 为 99% 表示程序运行了 100  秒，而 application threads 运行了 99 秒，GC 线程运行运行了 1 秒</u>
-- [high throughput](https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tune_app_thruput.html) means that more transactions are executed during a given amount of time. You can also measure the throughput by measuring how long it takes to perform a specific task or calculation.
-
-铺垫一下知识： [High Throughput VS Shorter GC Pause](https://zhuanlan.zhihu.com/p/100265755) ：
-
-- High Throughput 的好处让资源最大限度地用于“生产性工作”
-- Shorter GC Pause 可以提高客户端的用户体验，缩短因为 application threads 而造成的停顿时间
-- 每次启动并运行 GC 线程的时候，都非常消耗 CPU 资源，所以<u>想要实现 High Throughput，就要减少 GC 的次数</u>
-- 如果<u>减少了 GC 的次数，就会让每次 GC 的工作量增大，由此造成更长时间的 GC Pause</u>
-- 所以，想要<u>实现 Shorter GC Pause，需要增加 GC 的次数，让每个 GC 的工作量降低，从而让每次的 GC 都能更快完成任务</u>，减少 GC Pause 的时间
 
 Parallel Scavenge 提供了和 throughput 相关的参数选项：
 
@@ -252,6 +287,11 @@ As *N* increases, the reduction in processor resources due to concurrent garbage
 
 Because at least one processor is used for garbage collection during the concurrent phases, the concurrent collectors don't normally provide any benefit on a uniprocessor (single-core) machine.
 
+[G1 收集器的设计目标是取代 CMS 收集器，它同 CMS 相比，在以下方面表现的更出色](https://tech.meituan.com/2016/09/23/g1.html)：
+
+* G1 是一个有整理内存过程的垃圾收集器，不会产生很多内存碎片
+* G1 的 STW 更可控，G1 在停顿时间上添加了预测机制，用户可以指定期望停顿时间。
+
 ## CMS
 
 > The CMS collector is deprecated as of JDK 9. 
@@ -290,13 +330,24 @@ Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 
 # G1 Basic
 
-参考资料：官方文档 - [Garbage-First Garbage Collector](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-0394E76A-1A8F-425E-A0D0-B48A3DC82B42)
+参考资料：
+
+- 官方文档 - [Garbage-First Garbage Collector](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-0394E76A-1A8F-425E-A0D0-B48A3DC82B42)
+- [Java Hotspot G1 GC的一些关键技术](https://tech.meituan.com/2016/09/23/g1.html)
 
 ## Basic
 
 > The G1 (Garbage-First) garbage collector is the default collector, so typically you don't have to perform any additional actions. You can explicitly enable it by providing `-XX:+UseG1GC` on the command line.
 
 G1 is a **generational**, **incremental**, **parallel**, **mostly concurrent**, **stop-the-world**, and **evacuating** garbage collector which **monitors pause-time goals in each of the stop-the-world pauses**.
+
+ガベージファースト(G1)ガベージ・コレクタは<u>サーバー形式</u>のガベージ・コレクタで、<u>大容量のメモリー</u>を搭載する<u>マルチプロセッサ</u>・マシンを対象としています。ガベージ・コレクション(GC)<u>一時停止時間目標を高い確率で満たそうとしながら、高いスループットを実現します</u>。
+
+> G1 garbage collector is targeted for multiprocessor machines with a large amount of memory.  It attempts to meet garbage collection pause-time goals with high probability while achieving high throughput with little need for configuration. 
+>
+> G1是一种服务器端的垃圾收集器，应用在多处理器和大容量内存环境中，在实现 High Throughput（高吞吐量）的同时，尽可能的满足垃圾收集暂停时间的要求。
+
+グローバル・マーキングなどのヒープ全体オペレーションは、アプリケーション・スレッドと同時に実行されます。これによって、割込みがヒープまたはライブデータ・サイズに比例するのを防ぎます。
 
 G1 的 **Space-reclamation** （存储空间回收利用） efforts <u>concentrate on the young generation</u> where it is most efficient to do so, with occasional space-reclamation in the old generation:
 
@@ -316,9 +367,17 @@ G1 有 STW 和并发多线程的运作方式：
 
 G1 is <u>not a real-time collector</u>. It tries to meet set pause-time targets with high probability over a longer time, but not always with absolute certainty for a given pause.
 
-## Usage Scenarios
+---
 
-G1 garbage collector is <u>targeted for multiprocessor machines with a large amount of memory</u>.  It attempts to meet garbage collection pause-time goals with high probability while achieving high throughput with little need for configuration. 
+グローバル・マーキングなどのヒープ全体オペレーションは、アプリケーション・スレッドと同時に実行されます。これによって、割込みがヒープまたはライブデータ・サイズに比例するのを防ぎます。
+
+它是专门针对以下应用场景设计的: 
+
+* 像CMS收集器一样，能与应用程序线程并发执行
+* 整理空闲空间更快
+* 需要GC停顿时间更好预测
+* 不希望牺牲大量的吞吐性能
+* 不需要更大的 Java Heap
 
 G1 aims to provide the best balance between latency and throughput using current target applications and environments whose features include:
 
@@ -333,7 +392,9 @@ G1 aims to provide the best balance between latency and throughput using current
 
 **G1 partitions the heap into a set of equally sized heap regions, each a contiguous range of virtual memory** as shown in Figure 9-1. 
 
-**G1 将 Heap 划分为大约 2000 个 regions，每个 regions 的大小是 1MB 到 32MB（必须是 2 的幂次方大小）**。
+G1 GCは<u>リージョン単位</u>の<u>世代別</u>ガベージ・コレクタであり、そこではJava**オブジェクト・ヒープ(ヒープ)が多数の均等サイズのリージョンに **分割されます。
+
+**リージョン・サイズは、ヒープ・サイズに応じて1MBから32MB（必须是 2 的幂次方大小）**になる場合があります。**リージョンを2048個以内**に抑えるためです。
 
 ![Figure 9-1 G1 Garbage Collector Heap Layout](https://docs.oracle.com/javase/9/gctuning/img/jsgct_dt_004_grbg_frst_hp.png)
 
@@ -361,10 +422,12 @@ The Young Generation contains Eden regions and Survivor regions. These regions p
 
 An application always allocates into a young generation, that is, eden regions, with the exception of humongous, objects that are directly allocated as belonging to the old generation.
 
-**Humongous objects 只能被存入 Old Gen，存储 Humongous Objects 的 region 被称为 Humongous Region**:
+<span id="region_humongous">**Humongous objects 只能被存入 Old Gen，存储 Humongous Objects 的 region 被称为 Humongous Region**</span>:
 
 - **当 Object 大于等于 Region 大小的一半时，被视为 Humongous Object**
 - **如果某个 Humongous Object 比一个 region 的 size 还要大，就会申请多个连续的 regions 来存放该 Humongous Object**
+
+> 更多细节，可以查看[本文 Humongous Object 相关部分](#humongous)和[本文的 Humongous Object 调优部分](#tuning_humongous)
 
 G1 garbage collection pauses can reclaim space in the young generation as a whole, and any additional set of old generation regions at any collection pause. 
 
@@ -459,18 +522,79 @@ Turn off Adaptive IHOP of G1 using the option`-XX:-G1UseAdaptiveIHOP`. In this c
 
 Internally, <u>Adaptive IHOP tries to set the Initiating Heap Occupancy</u> so that the first mixed garbage collection of the space-reclamation phase starts when the old generation occupancy is at a <u>*current maximum old generation size*</u> <u>minus</u> the <u>*value of `-XX:G1HeapReservePercent`*</u> <u>as the extra buffer</u>.
 
-## Marking
+## Marking & SATB
 
-G1 marking uses an algorithm called **Snapshot-At-The-Beginning (SATB)** :
+**G1 marking** uses an algorithm called **Snapshot-At-The-Beginning (SATB)**. 
 
-- It <u>takes a virtual snapshot of the heap at the time of the Initial Mark pause</u>, when **all objects that were live at the start of marking are considered live for the remainder of marking**. 
-- This means that <u>objects that become dead (unreachable) during marking are still considered live</u> for the purpose of space-reclamation (with some exceptions). 
+[**SATB**](https://tech.meituan.com/2016/09/23/g1.html#satb)：
+
+- Snapshot At The Beginning：GC 开始时，对 live objects 进行 snapshot
+- 通过 Root Tracing，可以得到 SATB
+- 作用：维持并发 GC 的正确性（三色标记算法）
+
+It <u>takes a virtual snapshot of the heap at the time of the Initial Mark pause</u>, when **all objects that were live at the start of marking are considered live for the remainder of marking**. 
+
+This means that <u>objects that become dead (unreachable) during marking are still considered live</u> for the purpose of space-reclamation (with some exceptions). 
 
 This may cause some additional memory wrongly retained compared to other collectors. However, SATB potentially <u>provides better latency during the Remark pause</u>. 
 
 > See the [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) topic for more information about problems with marking.
 
  **The too conservatively considered live objects during that marking willbe reclaimed during the next marking**. 
+
+## RSet & CSet
+
+[在 GC 的时候，对于 old->young 和 old->old 的跨代对象引用，只要扫描对应的 CSet 中的 RSet 即可。](https://tech.meituan.com/2016/09/23/g1.html#rset)
+
+CSet：
+
+- Collection Set，是一种辅助 GC 过程的结构
+- 记录了本次 GC 要清理的 Region 集合，集合里的 Region 可以是任意年代的
+- 因为每次 GC 不是全部 region 都参与的，可能只清理少数几个，所以每次需要被清理的就放入 CSet
+
+RSet：
+
+- Remembered Set，辅助 GC 过程的一种结构，典型的空间换时间工具
+- 逻辑上每个 Region 都有一个 RSet
+- RSet 记录了其他 Region 中的对象引用当前 Region 中对象的关系
+
+RSet 对比 Card Table：
+
+- RSet 属于 points-into 结构（谁引用了我的对象）
+- Card Table 则是一种 points-out（我引用了谁的对象）的结构，每个 Card 覆盖一定范围的Heap（一般为512Bytes）
+- G1 的 RSet 是在 Card Table 的基础上实现的：
+	- 每个 Region 会记录下别的 Region 中，指向自己的指针，并标记这些指针分别在哪些 Card 的范围内
+	- 这个 RSet 其实是一个 Hash Table，Key 是别的 Region 的起始地址，Value 是一个集合，里面的元素是 Card Table 的 Index
+
+下图表示了RSet、Card和Region的关系：
+
+![http://www.infoq.com/articles/tuning-tips-G1-GC](https://awps-assets.meituan.net/mit-x/blog-images-bundle-2016/5aea17be.jpg)
+
+> 上图中有三个 Region，每个 Region 被分成了多个 Card，在不同 Region 中的 Card 会相互引用。
+>
+> Region1 中的 Card 中的对象引用了 Region2 中的 Card 中的对象，蓝色实线表示的就是 points-out 的关系。
+>
+> 而在 Region2 的 RSet 中，记录了 Region1 的 Card，即红色虚线表示 points-into。
+>
+> 维系 RSet 中的引用关系靠 post-write barrier  和 Concurrent refinement threads 来维护，[操作伪代码](http://hllvm.group.iteye.com/group/topic/44381) 如下：
+>
+> ```java
+> void oop_field_store(oop* field, oop new_value) {
+>   pre_write_barrier(field); // pre-write barrier: for maintaining SATB invariant
+>   *field = new_value;  // the actual store
+>   post_write_barrier(field, new_value); // post-write barrier: for tracking cross-region reference
+> }
+> ```
+>
+> post-write barrier 记录了跨 Region 的引用更新，更新日志缓冲区则记录了那些包含更新引用的 Cards。一旦缓冲区满了，Post-write barrier 就停止服务了，会由 Concurrent refinement threads 处理这些缓冲区日志
+
+RSet 究竟是怎么辅助 GC 的呢？
+
+- 在做 YGC 的时候，只需要选定 young generation region 的 RSet 作为根集，这些 RSet 记录了 old->young 的跨代引用，避免了扫描整个 old generation
+- mixed gc 的时候
+	- old generation 中记录了 old->old 的 RSet
+	- young->old 的引用由扫描全部 young generation region 得到
+	- 这样也不用扫描全部 old generation region。所以 RSet 的引入大大减少了 GC 的工作量。
 
 ## Behavior in Very Tight Heap Situations
 
@@ -487,21 +611,37 @@ When the application <u>keeps alive so much memory</u> so that an <u>evacuation 
 
 > See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about problems with allocation failure or Full GC's before signalling out of memory.
 
-## Humongous Objects
+## G1 GC：Young GC & Mixed GC
 
-Humongous objects are objects larger or equal the size of half a region. The current region size is determined ergonomically as described in the [Ergonomic Defaults for G1 GC](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#GUID-082C967F-2DAC-4B59-8A81-0CEC6EEB9016) section, unless set using the `-XX:G1HeapRegionSize` option.
+[G1 提供了两种 GC 模式——Young GC 和 Mixed GC，两种都是完全 Stop The World 的](https://tech.meituan.com/2016/09/23/g1.html#g1-gc%E6%A8%A1%E5%BC%8F)。
 
-These humongous objects are sometimes treated in special ways:
+Young GC：选定所有年轻代里的 Region。通过控制年轻代的 region 个数，即年轻代内存大小，来控制 young GC 的时间开销。
 
-- Every humongous object <u>gets allocated as **a sequence of contiguous regions** in the old generation</u> :
-	- The start of the object itself is always located <u>at the start of the first region in that sequence</u>. 
-	- <u>Any leftover space in the last region of the sequence will be lost for allocation until the entire object is reclaimed</u>.
-- Reclaim humongous objects:
-	- <u>Generally</u>, humongous objects can <u>be reclaimed only at the end of marking</u> during the Cleanup pause, or during Full GC if they became unreachable. 
-	- There is, however, a <u>special provision for humongous objects for arrays of primitive types</u> for example, `bool`, all kinds of integers, and floating point values. 
-	- G1 opportunistically <u>tries to reclaim humongous objects if they are not referenced by many objects at any kind of garbage collection pause</u>. This behavior is enabled by default but you can disable it with the option `-XX:G1EagerReclaimHumongousObjects`.
-- <u>Allocations of humongous objects may cause garbage collection pauses to occur prematurely</u>. G1 checks the Initiating Heap Occupancy threshold at every humongous object allocation and may force an initial mark young collection immediately, if current occupancy exceeds that threshold.
-- The <u>humongous objects never move</u>, not even during a Full GC. This <u>can cause premature slow Full GCs or unexpected out-of-memory conditions</u> with lots of free space left due to fragmentation of the region space.
+Mixed GC：选定所有年轻代里的 Region，外加根据 global concurrent marking 统计得出收集收益高的若干老年代 Region。在用户指定的开销目标范围内尽可能选择收益高的老年代 Region。
+
+Mixed GC 不是 full GC，它只能回收部分老年代的 Region，如果 mixed GC 实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行 Mixed GC，就会使用 serial old GC（full GC）来收集整个 GC heap。所以我们可以知道，G1 本身是不提供 full GC 的。
+
+global concurrent marking 的执行过程类似CMS，但是不同的是，在G1 GC中，它主要是为Mixed GC提供标记服务的，并不是一次GC过程的一个必须环节。
+
+Global Concurrent Marking 的执行过程分为四个步骤：
+
+1. 初始标记（Initial mark，STW）：标记了从 GC Root 开始直接可达的对象
+2. 并发标记（Concurrent Marking）：这个阶段从 GC Root 开始对 heap 中的对象标记，标记线程与应用程序线程并行执行，并且收集各个 Region 的存活对象信息
+3. 最终标记（Remark，STW）：标记那些在并发标记阶段发生变化的对象，将被回收
+4. 清除垃圾（Cleanup）：清除空没有存活对象的 Region，加入到free list
+
+第一阶段 initial mark 共用了 Young GC 的 Pause，这是因为 root scan 操作可以被复用，所以可以说 global concurrent marking 是伴随 Young GC 而发生的。
+
+第四阶段 Cleanup 只是回收了没有存活对象的 Region，所以它并不需要 STW。
+
+---
+
+Mixed GC 的发生，是由一些参数控制着的，这些参数也控制着哪些老年代 Region 会被选入CSet：
+
+* G1HeapWastePercent：在 global concurrent marking 结束之后，我们可以知道 old gen regions 中有多少空间要被回收，在每次 YGC 之后和再次发生Mixed GC 之前，会检查垃圾占比是否达到此参数，只有达到了，下次才会发生 Mixed GC。 
+* G1MixedGCLiveThresholdPercent：old generation region 中的存活对象的占比，只有在此参数之下，才会被选入 CSet。
+* G1MixedGCCountTarget：一次 global concurrent marking 之后，最多执行Mixed GC 的次数。
+* G1OldCSetRegionThresholdPercent：一次 Mixed GC 中能被选入 CSet 的最多 old generation region 数量。
 
 ## Young-Only Phase Generation Sizing
 
@@ -533,7 +673,28 @@ The **collection set candidate regions** are all <u>old generation regions that 
 
 > See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about how many old generation regions G1 will use and how to avoid long mixed collection pauses.
 
+## <span id="humongous">Humongous Objects</span>
 
+> 这里是对[前文](#region_humongous)提到的 Humongous Object 进行细节补充。
+>
+> 具体的调优，可以查看[本文的 Humongous Object 调优部分](#tuning_humongous)。
+
+Humongous objects are objects larger or equal the size of half a region. The current region size is determined ergonomically as described in the [Ergonomic Defaults for G1 GC](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#GUID-082C967F-2DAC-4B59-8A81-0CEC6EEB9016) section, unless set using the `-XX:G1HeapRegionSize` option.
+
+These humongous objects are sometimes treated in special ways:
+
+- Every humongous object <u>gets allocated as **a sequence of contiguous regions** in the old generation</u> :
+	- The start of the object itself is always located <u>at the start of the first region in that sequence</u>. 
+	- <u>Any leftover space in the last region of the sequence will be lost for allocation until the entire object is reclaimed</u>.
+- Reclaim humongous objects:
+	- <u>Generally</u>, humongous objects can <u>be reclaimed only at the end of marking</u> during the Cleanup pause, or during Full GC if they became unreachable.
+		- **只在 Global Concurrent Marking 阶段的 cleanup 和 full GC 阶段被回收**
+	- There is, however, a <u>special provision for humongous objects for arrays of primitive types</u> for example, `bool`, all kinds of integers, and floating point values. 
+	- G1 opportunistically <u>tries to reclaim humongous objects if they are not referenced by many objects at any kind of garbage collection pause</u>. This behavior is enabled by default but you can disable it with the option `-XX:G1EagerReclaimHumongousObjects`.
+
+<u>Allocations of humongous objects may cause garbage collection pauses to occur prematurely</u>. **G1 checks the Initiating Heap Occupancy threshold at every humongous object allocation** and may **force an initial mark young collection immediately, if current occupancy exceeds that threshold（超过该值就要提早回收，防止 evacuation failures 和 full GC）**.
+
+The <u>humongous objects never move</u>（直接分配到 old gen，防止反复拷贝移动）, not even during a Full GC. This <u>can cause premature slow Full GCs or unexpected out-of-memory conditions</u> with lots of free space left due to fragmentation of the region space.
 
 # G1 Tuning - General
 
@@ -587,11 +748,13 @@ G1 gives you several options to handle this situation better:
 
 Other causes than Allocation Failure for a Full GC typically indicate that either the application or some external tool causes a full heap collection. <u>If the cause is `System.gc()`, and there is no way to modify the application sources, the effect of Full GCs can be mitigated by using `-XX:+ExplicitGCInvokesConcurrent` or let the VM completely ignore them by setting `-XX:+DisableExplicitGC`</u>. External tools may still force Full GCs; they can be removed only by not requesting them.
 
-## Humongous Object Fragmentation
+## <span id="tuning_humongous">Humongous Object Fragmentation</span>
+
+> 这里是  Humongous Object 的调优，相关知识可以查看[本文的 Humongous Object 部分](#humongous)
 
 <u>A Full GC could occur before all Java heap memory has been exhausted due to the necessity of finding a contiguous set of regions for them</u>. 
 
-Potential options in this case are **increasing the heap region size by using the option `-XX:G1HeapRegionSize` to decrease the number of humongous objects**, or **increasing size of the heap**.
+Potential options in this case are **increasing the heap region size by using the option `-XX:G1HeapRegionSize` to decrease the number of humongous objects （设定的时候，范围是 1MB 到 32MB，且是2的指数，也就是范围必须在 region 的大小内）**, or **increasing size of the heap**.
 
 In extreme cases, there might not be enough contiguous space available for G1 to allocate the object even if available memory indicates otherwise. This would lead to a VM exit if that Full GC can not reclaim enough contiguous space. As a result, there are no other options than either decreasing the amount of humongous object allocations as mentioned previously, or increasing the heap.
 
@@ -601,9 +764,15 @@ In extreme cases, there might not be enough contiguous space available for G1 to
 
 This section discusses hints to improve G1 behavior in case of common latency problems that is, if the pause-time is too high.
 
+Topics:
 
+- [Unusual System or Real-Time Usage](#unusual-system-or-real-time-usage)
+- [Reference Object Processing Takes Too Long](#reference-object-processing-takes-too-long)
+- [Young-Only Collections Take Too Long](#young-only-collections-take-too-long)
+- [Mixed Collections Take Too Long](#mixed-collections-take-too-long)
+- [High Update RS and Scan RS Times](#high-update-rs-and-scan-rs-times)
 
-### Unusual System or Real-Time Usage
+**<span id="unusual-system-or-real-time-usage">Unusual System or Real-Time Usage</span>**
 
 For every garbage collection pause, the `gc+cpu=info` log output contains a line including information from the operating system with a breakdown about where during the pause-time has been spent. An example for such output is `User=0.19s Sys=0.00s Real=0.01s`.
 
@@ -619,13 +788,13 @@ Another situation to look out for is real time being a lot larger than the sum o
 
 
 
-### Reference Object Processing Takes Too Long
+**<span id="reference-object-processing-takes-too-long">Reference Object Processing Takes Too Long</span>**
 
 Information about the time taken for processing of Reference Objects is shown in the *Ref Proc* and *Ref Enq* phases. During the Ref Proc phase, G1 updates the referents of Reference Objects according to the requirements of their particular type. In Ref Enq, G1 enqueues Reference Objects into their respective reference queue if their referents were found dead. If these phases take too long, then consider enabling parallelization of these phases by using the option `-XX:+ParallelRefProcEnabled`.
 
 
 
-### Young-Only Collections Take Too Long
+**<span id="young-only-collections-take-too-long">Young-Only Collections Take Too Long</span>**
 
 Young-only and, in general any young collection roughly takes time proportional to the size of the young generation, or more specifically, the number of live objects within the collection set that needs to be copied. If the *Evacuate Collection Set* phase takes too long, in particular, the *Object Copy* sub-phase, decrease `-XX:G1NewSizePercent`. This decreases the minimum size of the young generation, allowing for potentially shorter pauses.
 
@@ -633,7 +802,7 @@ Another problem with sizing of the young generation may occur if application per
 
 
 
-### Mixed Collections Take Too Long
+**<span id="mixed-collections-take-too-long"> Mixed Collections Take Too Long</span>**
 
 Mixed collections are used to reclaim space in the old generation. The collection set of mixed collections contains young and old generation regions. You can obtain information about how much time evacuation of either young or old generation regions contribute to the pause-time by enabling the `gc+ergo+cset=trace` log output. Look at the *predicted young region* time and *predicted old region* time for young and old generation regions respectively.
 
@@ -647,7 +816,7 @@ Note that the last two options decrease the amount of collection set candidate r
 
 
 
-### High Update RS and Scan RS Times
+**<span id="high-update-rs-and-scan-rs-times">High Update RS and Scan RS Times</span>**
 
 To enable G1 to evacuate single old generation regions, G1 tracks locations of *cross-region references*, that is references that point from one region to another. The set of cross-region references pointing into a given region is called that region's *remembered set*. The remembered sets must be updated when moving the contents of a region. Maintenance of the regions' remembered sets is mostly concurrent. For performance purposes, G1 doesn't immediately update the remembered set of a region when the application installs a new cross-region reference between two objects. Remembered set update requests are delayed and batched for efficiency.
 
@@ -841,3 +1010,76 @@ If necessary, adjust the heap size to improve performance. If the performance st
 These guidelines provide only a starting point for selecting a collector because performance is dependent on the size of the heap, the amount of live data maintained by the application, and the number and speed of available processors. Pause-time is particularly sensitive to these factors, so the threshold of one second mentioned previously is only approximate. The parallel collector will experience a pause time longer than one second on many heap size and hardware combinations. Conversely, the concurrent collectors may not be able to keep pauses shorter than one seconds in some cases.
 
 If the recommended collector doesn't achieve the desired performance, then first attempt to adjust the heap and generation sizes to meet the desired goals. If performance is still inadequate, then try a different collector: Use the concurrent collector to reduce pause-time, and use the parallel collector to increase overall throughput on multiprocessor hardware.
+
+# Garbage Collection Tuning
+
+参考资料：[HotSpot Virtual Machine Garbage Collection Tuning Guide](https://docs.oracle.com/en/java/javase/12/gctuning/index.html)
+
+## Ergonomics
+
+**Ergonomics is the process by which the JVM and garbage collection heuristics, such as behavior-based heuristics, improve application performance.**
+
+The JVM provides platform-dependent default selections for the garbage collector, heap size, and runtime compiler. These selections match the needs of different types of applications while requiring less command-line tuning. In addition, behavior-based tuning dynamically optimizes the sizes of the heap to meet a specified behavior of the application.
+
+This section describes these default selections and behavior-based tuning. Use these defaults before using the more detailed controls described in subsequent sections.
+
+Topics:
+
+Topics:
+- [Garbage Collector, Heap, and Runtime Compiler Default Selections](#garbage-collector--heap--and-runtime-compiler-default-selections)
+- [Behavior-Based Tuning](#behavior-based-tuning)
+	- [Maximum Pause-Time Goal](#maximum-pause-time-goal)
+	- [Throughput Goal](#throughput-goal)
+	- [Footprint](#footprint)
+- [Tuning Strategy](#tuning-strategy)
+
+---
+
+**<span id="garbage-collector--heap--and-runtime-compiler-default-selections">Garbage Collector, Heap, and Runtime Compiler Default Selections</span>**
+
+These are important garbage collector, heap size, and runtime compiler default selections: 
+
+- Garbage-First (G1) collector
+- The maximum number of GC threads is limited by heap size and available CPU resources 
+- Initial heap size of 1/64 of physical memory 
+- Maximum heap size of 1/4 of physical memory 
+- Tiered compiler, using both C1 and C2 
+
+**<span id="behavior-based-tuning">Behavior-Based Tuning</span>**
+
+The Java HotSpot VM garbage collectors can be configured to preferentially meet one of two goals: maximum pause-time and application throughput. If the preferred goal is met, the collectors will try to maximize the other. Naturally, these goals can't always be met: Applications require a minimum heap to hold at least all of the live data, and other configuration might preclude reaching some or all of the desired goals.
+
+**<span id="maximum-pause-time-goal">Maximum Pause-Time Goal</span>**
+
+The *pause time* is the duration during which the garbage collector stops the application and recovers space that's no longer in use. The intent of the *maximum pause-time* goal is to limit the longest of these pauses.
+
+An average time for pauses and a variance on that average is maintained by the garbage collector. The average is taken from the start of the execution, but it's weighted so that more recent pauses count more heavily. If the average plus the variance of the pause-time is greater than the maximum pause-time goal, then the garbage collector considers that the goal isn't being met.
+
+The maximum pause-time goal is specified with the command-line option `-XX:MaxGCPauseMillis=`*<nnn>*. This is interpreted as a hint to the garbage collector that a pause-time of *<nnn>* milliseconds or fewer is desired. The garbage collector adjusts the Java heap size and other parameters related to garbage collection in an attempt to keep garbage collection pauses shorter than *<nnn>* milliseconds. The default for the maximum pause-time goal varies by collector. These adjustments may cause garbage collection to occur more frequently, reducing the overall throughput of the application. In some cases, though, the desired pause-time goal can't be met.
+
+**<span id="throughput-goal">Throughput Goal</span>**
+
+The throughput goal is measured in terms of the time spent collecting garbage, and the time spent outside of garbage collection is the*application time*.
+
+The goal is specified by the command-line option `-XX:GCTimeRatio=`*nnn*. The ratio of garbage collection time to application time is 1/ (1+*nnn*). For example, `-XX:GCTimeRatio=19` sets a goal of 1/20th or 5% of the total time for garbage collection.
+
+The time spent in garbage collection is the total time for all garbage collection induced pauses. If the throughput goal isn't being met, then one possible action for the garbage collector is to increase the size of the heap so that the time spent in the application between collection pauses can be longer.
+
+**<span id="footprint">Footprint</span>**
+
+If the throughput and maximum pause-time goals have been met, then the garbage collector reduces the size of the heap until one of the goals (invariably the throughput goal) can't be met. The minimum and maximum heap sizes that the garbage collector can use can be set using` -Xms=`*<nnn>* and `-Xmx=`*<mmm>* for minimum and maximum heap size respectively.
+
+**<span id="tuning-strategy">Tuning Strategy</span>**
+
+The heap grows or shrinks to a size that supports the chosen throughput goal. Learn about heap tuning strategies such as choosing a maximum heap size, and choosing maximum pause-time goal.
+
+Don't choose a maximum value for the heap unless you know that you need a heap greater than the default maximum heap size. Choose a throughput goal that's sufficient for your application.
+
+A change in the application's behavior can cause the heap to grow or shrink. For example, if the application starts allocating at a higher rate, then the heap grows to maintain the same throughput.
+
+If the heap grows to its maximum size and the throughput goal isn't being met, then the maximum heap size is too small for the throughput goal. Set the maximum heap size to a value that's close to the total physical memory on the platform, but doesn't cause swapping of the application. Execute the application again. If the throughput goal still isn't met, then the goal for the application time is too high for the available memory on the platform.
+
+If the throughput goal can be met, but pauses are too long, then select a maximum pause-time goal. Choosing a maximum pause-time goal may mean that your throughput goal won't be met, so choose values that are an acceptable compromise for the application.
+
+It's typical that the size of the heap oscillates as the garbage collector tries to satisfy competing goals. This is true even if the application has reached a steady state. The pressure to achieve a throughput goal (which may require a larger heap) competes with the goals for a maximum pause-time and a minimum footprint (which both may require a small heap).
+
