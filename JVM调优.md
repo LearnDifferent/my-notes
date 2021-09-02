@@ -163,6 +163,12 @@ Throughput：
 - 所以，想要<u>实现 Shorter GC Pause，需要增加 GC 的次数，让每个 GC 的工作量降低，从而让每次的 GC 都能更快完成任务</u>，减少 GC Pause 的时间
 
 > Users have different requirements of garbage collection. For example, some consider the right metric for a web server to be throughput because pauses during garbage collection may be tolerable or simply obscured by network latencies. However, in an interactive graphics program, even short pauses may negatively affect the user experience.
+>
+> Some users are sensitive to other considerations. *Footprint* is the working set of a process, measured in pages and cache lines. On systems with limited physical memory or many processes, footprint may dictate scalability. *Promptness* is the time between when an object becomes dead and when the memory becomes available, an important consideration for distributed systems, including Remote Method Invocation (RMI).
+
+In general, choosing the size for a particular generation is a trade-off between these considerations. For example, **a very large young generation may maximize throughput**, but does so at the expense of footprint, promptness, and pause times. **Young generation pauses can be minimized by using a small young generation** at the expense of throughput. The sizing of one generation doesn't affect the collection frequency and pause times for another generation.
+
+Checkout [Factors Affecting Garbage Collection Performance](https://docs.oracle.com/en/java/javase/12/gctuning/factors-affecting-garbage-collection-performance.html#GUID-5508674B-F32D-4B02-9002-D0D8C7CDDC75)
 
 # JVM Garbage Collectors
 
@@ -328,6 +334,26 @@ Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 	- 等待下次 CMS 的触发
 	- 可以和其他正在运行的线程同时运行的线程，<u>不会 STW</u>
 
+## The Z Garbage Collector
+
+参考资料：[The Z Garbage Collector](https://docs.oracle.com/en/java/javase/12/gctuning/z-garbage-collector1.html#GUID-A5A42691-095E-47BA-B6DC-FB4E5FAA43D0)
+
+The Z Garbage Collector (ZGC) is a **scalable low latency** garbage collector. <u>ZGC performs all expensive work concurrently</u>, without stopping the execution of application threads for more than 10ms, which makes <u>is suitable for applications which require low latency and/or use a very large heap</u> (multi-terabytes).
+
+The Z Garbage Collector is available as an experimental feature <u>starting with JDK 11</u>, and is enabled with the command-line options `-XX:+UnlockExperimentalVMOptions -XX:+UseZGC`.
+
+***
+
+**Setting the Heap Size**
+
+The most important tuning option for ZGC is setting the max heap size `(-Xmx)`. Since ZGC is a concurrent collector a max heap size must be selected such that, 1) the heap can accommodate the live-set of your application, and 2) there is enough headroom in the heap to allow allocations to be serviced while the GC is running. How much headroom is needed very much depends on the allocation rate and the live-set size of the application. In general, the more memory you give to ZGC the better. But at the same time, wasting memory is undesirable, so it’s all about finding a balance between memory usage and how often the GC needs to run.
+
+**Setting Number of Concurrent GC Threads**
+
+The second tuning option one might want to look at is setting the number of concurrent GC threads `(-XX:ConcGCThreads)`. ZGC has heuristics to automatically select this number. This heuristic usually works well but depending on the characteristics of the application this might need to be adjusted. This option essentially dictates how much CPU-time the GC should be given. Give it too much and the GC will steal too much CPU-time from the application. Give it too little, and the application might allocate garbage faster than the GC can collect it.
+
+
+
 # G1 Basic
 
 参考资料：
@@ -443,31 +469,32 @@ On a high level, the G1 collector alternates between two phases:
 
 Figure 9-2 gives an overview about this cycle with an example of the sequence of garbage collection pauses that could occur:
 
-![Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/javase/9/gctuning/img/jsgct_dt_001_grbgcltncyl.png)
+![Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/en/java/javase/12/gctuning/img/jsgct_dt_001_grbgcltncyl.png)
 
-> 上图为：[Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/javase/9/gctuning/img_text/jsgct_dt_001_grbgcltncyl.htm)
+> 上图为：[Figure 9-2 Garbage Collection Cycle Overview](https://docs.oracle.com/en/java/javase/12/gctuning/img_text/jsgct_dt_001_grbgcltncyl.html)
 
 The following list describes **the phases, their pauses and the transition between the phases of the G1 garbage collection cycle** in detail:
 
 1. **Young-only phase**: 
-	- This phase <u>starts with a few young-only collections that promote objects into the old generation</u>. 
-	- The <u>transition between the young-only phase and the space-reclamation phase starts when the old generation occupancy reaches the Initiating Heap Occupancy threshold</u>. At this time, G1 <u>schedules an Initial Mark young-only collection instead of a regular young-only collection</u>.
-	- *Initial Mark* : 
-		- This type of collection <u>starts the marking process</u> in addition to <u>performing a regular young-only collection</u>. 
-		- **Concurrent marking** determines all currently <u>reachable (live) objects</u> in the <u>old generation regions</u> to be <u>kept for the following space-reclamation</u> phase. 
-		- <u>While marking hasn’t completely finished, regular young collections may occur</u>. 
-		- <u>Marking finishes with two special **stop-the-world** pauses: Remark and Cleanup.</u>
-	- *Remark* (STW): 
-		- This pause <u>finalizes the marking itself</u>, and <u>performs global reference processing and class unloading</u>. 
-		- <u>Between Remark and Cleanup</u> G1 <u>calculates a summary of the liveness information concurrently</u>, which will <u>be finalized and used in the Cleanup pause to update internal data structures</u>.
-	- *Cleanup* (STW): 
-		- This pause also <u>reclaims completely empty regions</u>, and <u>determines whether a space-reclamation phase will actually follow</u>. 
-		- <u>If a space-reclamation phase follows, the young-only phase completes with a single young-only collection</u>.
+	- This phase **starts with a few Normal young collections** <u>that promote objects into the old generation</u>. 
+	- **The transition between the young-only phase and the space-reclamation phase starts when the old generation occupancy reaches the Initiating Heap Occupancy threshold**. <u>At this time, G1 schedules a **Concurrent Start young collection** instead of a Normal young collection</u>.
+	- **Concurrent Start** : 
+		- This type of collection **starts the marking process** in addition to <u>performing a Normal young collection</u>. 
+		- **Concurrent marking** <u>determines all currently reachable (live) objects in the old generation regions to be kept for the following space-reclamation phase</u>. 
+		- *While marking hasn’t completely finished, Normal young collections may occur.*
+		- **Marking finishes with two special stop-the-world pauses: Remark and Cleanup**.
+		- 注：Concurrent Start 在 JVM 9 的[文档](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector.htm#JSGCT-GUID-F1BE86FA-3EDC-4D4F-BDB4-4B044AD83180)中叫做 Initial Mark
+	- **Remark** (STW): 
+		- This pause **finalizes the marking** itself, **performs global reference processing and class unloading**, **reclaims completely empty regions** and **cleans up internal data structures**.
+		- <u>Between Remark and Cleanup</u> **G1 calculates information to later be able to reclaim free space in selected old generation regions concurrently**, <u>which will be finalized in the Cleanup pause</u>.
+	- **Cleanup** (STW): 
+		- **This pause determines whether a space-reclamation phase will actually follow**. 
+		- <u>If a space-reclamation phase follows</u>, the **young-only phase completes with <u>a single Prepare Mixed young collection</u>**. 
 2. **Space-reclamation phase**: 
-	- This phase <u>consists of multiple mixed collections</u> that in addition to young generation regions, also evacuate live objects of sets of old generation regions. 
-	- The space-reclamation phase <u>ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort</u>.
-3. After space-reclamation, the collection cycle restarts with another young-only phase. 
-4. As backup, <u>if the application runs out of memory while gathering liveness information</u>, G1 performs an in-place <u>stop-the-world full heap compaction (Full GC)</u> like other collectors.
+	- **This phase consists of multiple Mixed collections** <u>that in addition to young generation regions</u>, also **evacuate live objects of sets** <u>of old generation regions</u>. 
+	- **This phase ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort**.
+
+**After space-reclamation, the collection cycle restarts with another young-only phase**. As backup, <u>if the application runs out of memory while gathering liveness information, G1 performs an in-place stop-the-world full heap compaction (Full GC) like other collectors</u>.
 
 ## Ergonomic Defaults for G1
 
@@ -495,6 +522,7 @@ This is a summary of the main differences between G1 and the other collectors:
 - Parallel GC can compact and reclaim space in the old generation only as a whole. G1 incrementally distributes this work across multiple much shorter collections. This substantially shortens pause time at the potential expense of throughput.
 - Similar to the CMS, G1 concurrently performs part of the old generation space-reclamation concurrently. However, CMS can't defragment the old generation heap, eventually running into long Full GC's.
 - G1 may exhibit higher overhead than other collectors, affecting throughput due to its concurrent nature.
+- ZGC is targeted at very large heaps, aiming to provide significantly smaller pause times at further cost of throughput.
 
 Due to how it works, G1 has some unique mechanisms to improve garbage collection efficiency:
 
@@ -506,6 +534,50 @@ Reclaiming empty, large objects from the old generation is always enabled. You c
 # G1 Internals
 
 This section describes some important details of the Garbage-First (G1) garbage collector.
+
+## Java Heap Sizing
+
+G1 respects standard rules when resizing the Java heap, using `-XX:InitialHeapSize` as the minimum Java heap size, `-XX:MaxHeapSize` as the maximum Java heap size, `-XX:MinHeapFreeRatio `for the minimum percentage of free memory, `-XX:MaxHeapFreeRatio` for determining the maximum percentage of free memory after resizing. 
+
+**G1 collector considers to resize the Java heap during a the Remark and the Full GC pauses only**. <u>This process may release memory to or allocate memory from the operating system</u>.
+
+### Young-Only Phase Generation Sizing
+
+**G1 always sizes the young generation at the end of a normal young collection** <u>for the next mutator phase</u>. This way, **G1 can meet the pause time goals that were set using `-XX:MaxGCPauseTimeMillis` and `-XX:PauseTimeIntervalMillis` based on long-term observations of actual pause time** :
+
+- It takes into account how long it took young generations of similar size to evacuate. 
+- This includes information like how many objects had to be copied during collection, and how interconnected these objects had been.
+
+<u>If not otherwise constrained, then G1 adaptively sizes the young generation size between the values that `-XX:G1NewSizePercent` and `-XX:G1MaxNewSizePercent` determine to meet pause-time.</u> 
+
+<u>Alternatively, `-XX:NewSize` in combination with `-XX:MaxNewSize` may be used to set minimum and maximum young generation size respectively.</u>
+
+> Note: Only specifying one of these latter options fixes young generation size to exactly the value passed with -`XX:NewSize` and `-XX:MaxNewSize` respectively. This disables pause time control.
+
+### Space-Reclamation Phase Generation Sizing
+
+During the space-reclamation phase, G1 tries to **maximize the amount of space that is reclaimed in the old generation in a single garbage collection pause**. The **size of the young generation is set to the minimum allowed**, typically as **determined by `-XX:G1NewSizePercent`**.
+
+**At the start of every mixed collection (Mix GC) in this phase, G1 selects a set of regions from the collection set candidates to add to the collection set**. <u>This additional set of old generation regions consists of three parts</u>:
+
+- **A minimum set of old generation regions to ensure evacuation progress**. This set of old generation regions is determined by the number of regions in the collection set candidates divided by the length of the Space-Reclamation phase as determined by `-XX:G1MixedGCCountTarget`.
+- **Additional old generation regions from the collection set candidates** <u>if G1 predicts that after collecting the minimum set there will be time left</u>. Old generation regions are added until 80% of the remaining time is predicted to be used.
+- <u>A set of optional collection set regions that G1 evacuates incrementally after the other two parts have been evacuated and there is time left in this pause</u>.
+
+*The first two sets of regions are collected in an initial collection pass, with additional regions from the optional collection set fit into the remaining pause time.* This method ensures space reclamation progress while improving the probability to keep pause time and minimal overhead due to management of the optional collection set.
+
+**The Space-Reclamation phase ends when the remaining amount of space that can be reclaimed in the collection set candidate regions is less than the percentage set by` -XX:G1HeapWastePercent`.**
+
+## Periodic Garbage Collections
+
+<u>If there is no garbage collection for a long time because of application inactivity, the VM may hold on to a large amount of unused memory for a long time that could be used elsewhere</u>. **To avoid this, G1 can be forced to do regular garbage collection using the `-XX:G1PeriodicGCInterval` option**. <u>This option determines a minimum interval in ms at which G1 considers performing a garbage collection</u>. If this amount of time passed since any previous garbage collection pause and there is no concurrent cycle in progress, G1 triggers additional garbage collections with the following possible effects:
+
+- During the Young-Only phase: G1 starts a concurrent marking using a Concurrent Start pause or, if `-XX:-G1PeriodicGCInvokesConcurrent` has been specified, a Full GC.
+- During the Space Reclamation phase: G1 continues the space reclamation phase triggering the garbage collection pause type appropriate to current progress.
+
+The `-XX:G1PeriodicGCSystemLoadThreshold` option may be used to refine whether a garbage collection is triggered: if the average one-minute system load value as returned by the `getloadavg()` call on the JVM host system (for example, a container) is above this value, no periodic garbage collection will be run.
+
+See [JEP 346: Promptly Return Unused Committed Memory from G1](https://openjdk.java.net/jeps/346) for more information about periodic garbage collections.
 
 ## IHOP
 
@@ -538,9 +610,9 @@ This means that <u>objects that become dead (unreachable) during marking are sti
 
 This may cause some additional memory wrongly retained compared to other collectors. However, SATB potentially <u>provides better latency during the Remark pause</u>. 
 
-> See the [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) topic for more information about problems with marking.
-
  **The too conservatively considered live objects during that marking willbe reclaimed during the next marking**. 
+
+> See the [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/en/java/javase/12/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) topic for more information about problems with marking.
 
 ## RSet & CSet
 
@@ -642,36 +714,6 @@ Mixed GC 的发生，是由一些参数控制着的，这些参数也控制着�
 * G1MixedGCLiveThresholdPercent：old generation region 中的存活对象的占比，只有在此参数之下，才会被选入 CSet。
 * G1MixedGCCountTarget：一次 global concurrent marking 之后，最多执行Mixed GC 的次数。
 * G1OldCSetRegionThresholdPercent：一次 Mixed GC 中能被选入 CSet 的最多 old generation region 数量。
-
-## Young-Only Phase Generation Sizing
-
-During the young-only phase, the set of regions to collect (collection set), consists only of young generation regions. 
-
-G1 always sizes the young generation at the end of a young-only collection: 
-
-- This way, G1 can meet the pause time goals that were set using `-XX:MaxGCPauseTimeMillis` and `-XX:PauseTimeIntervalMillis` based on long-term observations of actual pause time
-- It takes into account how long it took young generations of similar size to evacuate. This includes information like how many objects had to be copied during collection, and how interconnected these objects had been.
-
-If not otherwise constrained, then G1 adaptively sizes the young generation size between the values that `-XX:G1NewSizePercent` and `-XX:G1MaxNewSizePercent` determine to meet pause-time. 
-
-> See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about how to fix long pauses.
-
-## Space-Reclamation Phase Generation Sizing
-
-During the space-reclamation phase, G1 <u>tries to maximize the amount of space that's reclaimed in the old generation in a single garbage collection pause</u> :
-
-- The size of the **young generation is set to minimum** allowed, typically as determined by -XX:G1NewSizePercent, 
-- and **any old generation regions to reclaim space are added** <u>until G1 determines that adding further regions will exceed the pause time goal</u>. 
-
-In a particular garbage collection pause, G1 **adds old generation regions in order of their reclamation efficiency, highest first, and the remaining available time** <u>to get the final collection set</u>.
-
-The number of old generation regions to take per garbage collection is bounded at the lower end by the number of potential candidate old generation regions (*collection set candidate regions*) to collect, divided by the length of the space-reclamation phase as determined by `-XX:G1MixedGCCountTarget`. 
-
-The **collection set candidate regions** are all <u>old generation regions that have an occupancy that's lower than `-XX:G1MixedGCLiveThresholdPercent` at the start of the phase</u>.
-
-**The phase ends when the remaining amount of space that can be reclaimed in the collection set candidate regions is less than the percentage set by `-XX:G1HeapWastePercent`.**
-
-> See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about how many old generation regions G1 will use and how to avoid long mixed collection pauses.
 
 ## <span id="humongous">Humongous Objects</span>
 
