@@ -746,11 +746,13 @@ This section describes how to adapt Garbage-First garbage collector (G1 GC) beha
 
 The general recommendation is to use G1 with its default settings, eventually giving it a different pause-time goal and setting a maximum Java heap size by using `-Xmx` if desired.
 
-G1 defaults have been balanced differently than either of the other collectors. G1's goals in the default configuration are neither maximum throughput nor lowest latency, but to <u>provide relatively small, uniform（均匀的） pauses at high throughput</u>. However, G1's mechanisms to incrementally reclaim space in the heap and the pause-time control incur some overhead in both the application threads and in the space-reclamation efficiency.
+G1 defaults have been balanced differently than either of the other collectors. G1's goals in the default configuration are neither maximum throughput nor lowest latency, but to <u>provide relatively small, uniform（均匀的） pauses at high throughput</u>. However, <u>G1's mechanisms to incrementally reclaim space in the heap and the pause-time control incur some overhead in both the application threads and in the space-reclamation efficiency</u>.
 
 If you prefer **high throughput**, then **relax the pause-time goal by using `-XX:MaxGCPauseMillis`** or **provide a larger heap**. 
 
-If **latency** is the main requirement, then **modify the pause-time target** . **Avoid limiting the young generation size to particular values by using options like `-Xmn`, `-XX:NewRatio`** and others <u>because the young generation size is the main means for G1 to allow it to meet the pause-time</u>. Setting the young generation size to a single value overrides and practically disables pause-time control.
+If **latency** is the main requirement, then **modify the pause-time target**. **Avoid limiting the young generation size to particular values by using options like `-Xmn`, `-XX:NewRatio`** and others <u>because the young generation size is the main means for G1 to allow it to meet the pause-time</u>. 
+
+Setting the young generation size to a single value overrides and practically disables pause-time control.
 
 ## Moving to G1 from Other Collectors
 
