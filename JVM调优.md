@@ -336,11 +336,19 @@ Use the option `-XX:+UseConcMarkSweepGC` to enable the CMS collector
 
 ## The Z Garbage Collector
 
-参考资料：[The Z Garbage Collector](https://docs.oracle.com/en/java/javase/12/gctuning/z-garbage-collector1.html#GUID-A5A42691-095E-47BA-B6DC-FB4E5FAA43D0)
+参考资料：[The Z Garbage Collector](https://docs.oracle.com/en/java/javase/12/gctuning/z-garbage-collector1.html#GUID-A5A42691-095E-47BA-B6DC-FB4E5FAA43D0) 和 [Z Garbage Collector](https://www.baeldung.com/jvm-garbage-collectors#6-z-garbage-collector)
 
-The Z Garbage Collector (ZGC) is a **scalable low latency** garbage collector. <u>ZGC performs all expensive work concurrently</u>, without stopping the execution of application threads for more than 10ms, which makes <u>is suitable for applications which require low latency and/or use a very large heap</u> (multi-terabytes).
+The Z Garbage Collector (ZGC) is a **scalable low latency** garbage collector. <u>ZGC performs all expensive work concurrently</u>, **without stopping the execution of application threads for more than 10ms**, which makes <u>is suitable for applications which require low latency and/or use a very large heap</u> (multi-terabytes).
 
-The Z Garbage Collector is available as an experimental feature <u>starting with JDK 11</u>, and is enabled with the command-line options `-XX:+UnlockExperimentalVMOptions -XX:+UseZGC`.
+The Z Garbage Collector is available as an experimental feature <u>starting with JDK 11</u> as an experimental option for Linux, and is enabled with the command-line options `-XX:+UnlockExperimentalVMOptions -XX:+UseZGC`.
+
+JDK 14 introduced *ZGC* under the Windows and macOS operating systems. *ZGC* has obtained the production status from Java 15 onwards.
+
+From version 15 we don't need experimental mode on, only: `java -XX:+UseZGC`
+
+Reference coloring (colored pointers) is the core concept of *ZGC*. It means that *ZGC* uses some bits (metadata bits) of reference to mark the state of the object. It also **handles heaps ranging from 8MB to 16TB in size**. Furthermore, pause times do not increase with the heap, live-set, or root-set size.
+
+Similar to *G1, Z Garbage Collector* partitions the heap, except that heap regions can have different sizes.
 
 ***
 
@@ -373,7 +381,9 @@ G1 is a **generational**, **incremental**, **parallel**, **mostly concurrent**, 
 >
 > G1是一种服务器端的垃圾收集器，应用在多处理器和大容量内存环境中，在实现 High Throughput（高吞吐量）的同时，尽可能的满足垃圾收集暂停时间的要求。
 
-グローバル・マーキングなどのヒープ全体オペレーションは、アプリケーション・スレッドと同時に実行されます。これによって、割込みがヒープまたはライブデータ・サイズに比例するのを防ぎます。
+<u>グローバル・マーキング</u>などのヒープ全体オペレーションは、<u>アプリケーション・スレッドと同時に実行されます</u>。これによって、<u>割込みがヒープまたはライブデータ・サイズに比例するのを防ぎます</u>。
+
+G1コレクタは、いくつかの技術によって高いパフォーマンスおよび一時停止時間目標を実現します。
 
 G1 的 **Space-reclamation** （存储空间回收利用） efforts <u>concentrate on the young generation</u> where it is most efficient to do so, with occasional space-reclamation in the old generation:
 
@@ -384,7 +394,15 @@ G1 有 STW 和并发多线程的运作方式：
 - <u>Some operations are always performed in stop-the-world pauses to improve throughput</u>. 
 - <u>Other operations</u> that would <u>take more time with the application stopped</u> such as whole-heap operations like *global marking* <u>are performed in parallel and concurrently</u> with the application.
 
+[G1还有一个及其重要的特性](https://www.jianshu.com/p/aef0f4765098)：软实时（soft real-time）。所谓的实时垃圾回收，是指在要求的时间内完成垃圾回收。“软实时”则是指，用户可以指定垃圾回收时间的限时，G1会努力在这个时限内完成垃圾回收，但是G1并不担保每次都能在这个时限内完成垃圾回收。通过设定一个合理的目标，可以让达到90%以上的垃圾回收时间都在这个时限内。
+
 <u>G1 achieves predictability by tracking information about previous application behavior and garbage collection pauses</u> to build a model of the associated costs. It uses this information to size the work done in the pauses. For example, <u>G1 reclaims space in the most efficient areas first</u> (that is the areas that are mostly filled with garbage, therefore the name).
+
+> G1は、ヒープの1つ以上のリージョンからヒープ上の単一リージョンにオブジェクトをコピーし、その処理内でメモリーを圧縮して解放します。この退避は、一時停止時間を減らし、スループットを向上させるために、マルチプロセッサ上で並列実行されます。このように、各ガベージ・コレクションで、G1は継続的に断片化を減らすために動作します。これは前の2つの方式の能力を上回っています。CMS (コンカレント・マーク・スイープ)ガベージ・コレクションは圧縮を行いません。パラレル圧縮はヒープ全体圧縮のみを実行するため、一時停止時間が長くなります。
+>
+> G1はリアルタイム・コレクタではなことに注目することが重要です。設定された一時停止時間目標を高い確率で満たしますが、絶対確実ではありません。G1は、以前の収集からのデータに基づき、目標時間内に収集できるリージョン数を見積もります。このため、コレクタはリージョンを収集するコストの妥当に正確なモデルを持っており、これを使用して一時停止時間目標内でどのリージョンをどのくらい収集するかを判断します。
+
+---
 
 **G1 reclaims space mostly by using evacuation** : 
 
@@ -392,10 +410,6 @@ G1 有 STW 和并发多线程的运作方式：
 - After an evacuation has been completed, the space previously occupied by live objects is reused for allocation by the application.
 
 G1 is <u>not a real-time collector</u>. It tries to meet set pause-time targets with high probability over a longer time, but not always with absolute certainty for a given pause.
-
----
-
-グローバル・マーキングなどのヒープ全体オペレーションは、アプリケーション・スレッドと同時に実行されます。これによって、割込みがヒープまたはライブデータ・サイズに比例するのを防ぎます。
 
 它是专门针对以下应用场景设计的: 
 
@@ -407,12 +421,14 @@ G1 is <u>not a real-time collector</u>. It tries to meet set pause-time targets 
 
 G1 aims to provide the best balance between latency and throughput using current target applications and environments whose features include:
 
-- <u>Heap sizes</u> up to ten of GBs or <u>larger</u>, with <u>more than 50%</u> of the Java heap <u>occupied with live data</u>.
+- <u>Heap sizes</u> up to ten of GBs or <u>larger</u>, with <u>more than 50%</u> of the Java heap <u>occupied with live data</u>. 
 - Rates of <u>object allocation</u> and <u>promotion</u> that can <u>vary significantly over time</u>（在不同的时间，会有所不同）. 
 - A significant amount of fragmentation in the heap.（Heap 分为大量区域）
 - Predictable pause-time target goals that aren’t longer than a few hundred milliseconds, <u>avoiding long garbage collection pauses</u>.
 
-~~The G1 collector achieves high performance and tries to meet pause-time goals in several ways described in the following sections.~~
+> * Javaヒープの50%超がライブ・データで占められている。
+> * オブジェクトの割当て率または昇格率が大きく変化する。
+> * ガベージ・コレクションまたは圧縮によるアプリケーションの一時停止の長さが望ましくない(0.5から1秒を超える)。
 
 ## Heap Layout & Region
 
@@ -459,13 +475,23 @@ G1 garbage collection pauses can reclaim space in the young generation as a whol
 
 During the pause G1 copies objects from this *collection set* to one or more different regions in the heap. The destination region for an object depends on the source region of that object: the entire young generation is copied into either survivor or old regions, and objects from old regions to other, different old regions using aging.
 
-## GC Cycle
+## <span id="gc-cycle">GC Cycle</span>
+
+> G1は、**ヒープ全体のオブジェクトがライブかどうかを判断する**、**同時グローバル・マーキング・フェーズを実行します**。
+>
+> マーキング・フェーズの完了後、**G1はどのリージョンがほぼ空であるかを認識します。それらのリージョンを最初に収集し、通常は多くのスペースを解放します**。<u>このため、この方式のガベージ・コレクションがガベージファーストと呼ばれます</u>。
+>
+> G1はその名が示すとおり、**再生可能なオブジェクト(ガベージ)でいっぱいとなっている可能性の高いヒープ領域に対して、収集および圧縮活動を集中します**。
+>
+> G1は、<u>ユーザー定義の一時停止時間目標を満たすために</u> **一時停止予測モデルを使用し、指定された一時停止時間目標に基づいて収集するリージョン数を選択します**。
 
 On a high level, the G1 collector alternates between two phases: 
 
 - The **young-only phase** contains garbage collections that <u>fill up the currently available memory with objects in the old generation gradually</u>.
 - The **space-reclamation phase** is where G1 <u>reclaims space in the old generation incrementally</u>, in addition to <u>handling the young generation</u>. 
 - <u>Then the cycle restarts with a young-only phase</u>.
+
+> 可以参考本文的 [G1 GC：Young GC & Mixed GC](#g1-gc-young-gc---mixed-gc)
 
 Figure 9-2 gives an overview about this cycle with an example of the sequence of garbage collection pauses that could occur:
 
@@ -494,7 +520,27 @@ The following list describes **the phases, their pauses and the transition betwe
 	- **This phase consists of multiple Mixed collections** <u>that in addition to young generation regions</u>, also **evacuate live objects of sets** <u>of old generation regions</u>. 
 	- **This phase ends when G1 determines that evacuating more old generation regions wouldn't yield enough free space worth the effort**.
 
-**After space-reclamation, the collection cycle restarts with another young-only phase**. As backup, <u>if the application runs out of memory while gathering liveness information, G1 performs an in-place stop-the-world full heap compaction (Full GC) like other collectors</u>.
+> 一時停止：
+>
+> G1はライブ・オブジェクトを新しいリージョンにコピーするため、アプリケーションを一時停止します。
+>
+> このような一時停止は、若いリージョンのみが収集される若いコレクションの一時停止の場合もあれば、若いリージョンと古いリージョンを退避させる混合コレクションの一時停止の場合もあります。
+>
+> アプリケーションの停止中に、マーキングを完了するための最終マーキングまたは再マークの一時停止が行われます。CMSには初期マーキングの一時停止もありますが、G1では退避の一時停止内で初期マーキングが行われます。
+>
+> G1にはコレクションの最後に、部分的にSTW、また部分的にコンカレントなクリーンアップ・フェーズがあります。クリーンアップ・フェーズのSTW部分では空のリージョンを識別し、次のコレクションの候補となる古いリージョンを特定します。
+
+**After space-reclamation, the collection cycle restarts with another young-only phase**. 
+
+> 割当て(退避)の失敗：
+>
+> G1コレクタではアプリケーションの実行が継続中にコレクションの一部を実行するので、ガベージ・コレクタが空き領域をリカバリするよりも速く、アプリケーションがオブジェクトを割り当てるおそれがあります。
+>
+> 1つのリージョンから別のリージョンにライブ・データをコピー(退避)している最中に、この失敗(Javaヒープの枯渇)が発生します。
+>
+> コピーはライブ・データを圧縮するために行われます。ガベージ・コレクトされるリージョンの退避中に、空き(empty)リージョンが見つからないと、割当ての失敗が発生し(退避中のリージョンのライブ・データを割り当てる領域がないため)、stop-the-world (STW)フル・コレクションが実行されます。
+
+As backup, <u>if the application runs out of memory while gathering liveness information, G1 performs an in-place stop-the-world full heap compaction (Full GC) like other collectors</u>.
 
 ## Ergonomic Defaults for G1
 
@@ -598,6 +644,14 @@ Internally, <u>Adaptive IHOP tries to set the Initiating Heap Occupancy</u> so t
 
 **G1 marking** uses an algorithm called **Snapshot-At-The-Beginning (SATB)**. 
 
+> フローティング・ガベージ：
+>
+> オブジェクトはG1コレクション中に寿命を終え、収集されない可能性があります。
+>
+> G1はsnapshot-at-the-beginning (SATB)と呼ばれる方式を使用して、すべてのライブ・オブジェクトがガベージ・コレクタによって検出されることを保証します。
+>
+> SATBでは、コンカレント・マーキング(ヒープ全体のマーキング)の開始時にライブであったすべてのオブジェクトをコレクションの目的においてはライブとみなす、と定められています。SATBでは、CMSのインクリメンタル更新と類似する方法でフローティング・ガベージを許可します。
+
 [**SATB**](https://tech.meituan.com/2016/09/23/g1.html#satb)：
 
 - Snapshot At The Beginning：GC 开始时，对 live objects 进行 snapshot
@@ -614,7 +668,7 @@ This may cause some additional memory wrongly retained compared to other collect
 
 > See the [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/en/java/javase/12/gctuning/garbage-first-garbage-collector-tuning.html#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) topic for more information about problems with marking.
 
-## RSet & CSet
+## RSet & CSet & Card Table
 
 [在 GC 的时候，对于 old->young 和 old->old 的跨代对象引用，只要扫描对应的 CSet 中的 RSet 即可。](https://tech.meituan.com/2016/09/23/g1.html#rset)
 
@@ -624,11 +678,17 @@ CSet：
 - 记录了本次 GC 要清理的 Region 集合，集合里的 Region 可以是任意年代的
 - 因为每次 GC 不是全部 region 都参与的，可能只清理少数几个，所以每次需要被清理的就放入 CSet
 
+> G1 GCは、ライブ・オブジェクトを1つ以上のリージョン・セット(コレクション・セット(CSet)と呼ばれる)から1つ以上の別の新しいリージョンにインクリメンタル・パラレル・コピー方式で圧縮することにより、ヒープの断片化を減らします。これにより、一時停止時間目標(ガベージファースト)を超えないように努めながら、最も再生可能な領域を含むリージョンから開始して、できるだけ多くのヒープ領域を回収します。
+
 RSet：
 
 - Remembered Set，辅助 GC 过程的一种结构，典型的空间换时间工具
 - 逻辑上每个 Region 都有一个 RSet
 - RSet 记录了其他 Region 中的对象引用当前 Region 中对象的关系
+
+> G1 GCでは、個別の記憶集合(RSet)を使用して、リージョンへの参照を追跡します。
+>
+> 個別のRSetを使用すると、そのリージョンへの参照のスキャンが必要になるのはヒープ全体ではなくリージョンのRSetだけになるので、リージョンのコレクションを並列かつ個別に実行できるようになります。G1 GCでは、ポストライト・バリアを使用してヒープの変更を記録し、RSetを更新します。
 
 RSet 对比 Card Table：
 
@@ -662,11 +722,23 @@ RSet 对比 Card Table：
 
 RSet 究竟是怎么辅助 GC 的呢？
 
-- 在做 YGC 的时候，只需要选定 young generation region 的 RSet 作为根集，这些 RSet 记录了 old->young 的跨代引用，避免了扫描整个 old generation
-- mixed gc 的时候
+- 在做 YGC 的时候：
+	- 因为 Old Gen 不用 GC，所以会把 Old Gen 里面的 Objects 当作 GC Roots，于是需要扫描整个 Old Gen
+	- 有了 RSet 后，只需要选定 Young Gen 的 Region 的 RSet 作为根集，查看这些 RSet 记录的 old->young 的跨代引用，避免了扫描整个 Old Gen
+- mixed gc 的时候：
 	- old generation 中记录了 old->old 的 RSet
 	- young->old 的引用由扫描全部 young generation region 得到
 	- 这样也不用扫描全部 old generation region。所以 RSet 的引入大大减少了 GC 的工作量。
+
+---
+
+カード・テーブルとコンカレント・フェーズ：
+
+ガベージ・コレクタがヒープ全体を収集しない場合(*インクリメンタル (incremental)・コレクション*)、そのガベージ・コレクタは、収集されないヒープ部分から収集されるヒープ部分へのポインタがどこにあるかを把握している必要があります。これは一般的には世代別ガベージ・コレクタを対象としたもので、通常は収集されないヒープ部分は古い世代、収集されるヒープ部分は若い世代です。この情報を維持するためのデータ構造(古い世代から若い世代のオブジェクトへのポインタ)は*記憶集合(Remembered Set)*です。*カード・テーブル*は特定タイプの記憶集合です。Java HotSpot VMではバイト配列をカード・テーブルとして使用します。各バイトは*カード*と呼ばれます。カードはヒープ内のアドレス範囲に相当します。*カードのDirty化*とは、バイトの値を*dirty値*に変更することを意味します。dirty値には、カードが対象とするアドレス範囲内の古い世代から若い世代への新しいポインタが含まれている場合があります。
+
+*カードの処理*とは、古い世代から若い世代へのポインタがあるかどうかカードを確認して、その情報を別のデータ構造へ転送するなど、場合によってなんらかの処理を行うことを意味します。
+
+G1には、コンカレント・マーキング・フェーズがあり、そこではアプリケーションからの検出されたライブ・オブジェクトをマークします。コンカレント・マーキングは、(初期マーキング作業が行われる)退避の一時停止の終わりから再マークまでの期間です。コンカレント・クリーンアップ・フェーズでは、コレクションによって空状態になったリージョンを空きリージョン・リストに追加して、これらのリージョンの記憶集合をクリアします。また、同時絞込みスレッドを必要に応じて実行し、アプリケーション書込みによってdirty化され、リージョン間の参照が記録されている可能性のあるカード・テーブルのエントリを処理します。
 
 ## Behavior in Very Tight Heap Situations
 
@@ -683,24 +755,29 @@ When the application <u>keeps alive so much memory</u> so that an <u>evacuation 
 
 > See [Garbage-First Garbage Collector Tuning](https://docs.oracle.com/javase/9/gctuning/garbage-first-garbage-collector-tuning.htm#GUID-90E30ACA-8040-432E-B3A0-1E0440AB556A) for more information about problems with allocation failure or Full GC's before signalling out of memory.
 
-## G1 GC：Young GC & Mixed GC
+## <span id="g1-gc-young-gc---mixed-gc">G1 GC：Young GC & Mixed GC</span>
 
 [G1 提供了两种 GC 模式——Young GC 和 Mixed GC，两种都是完全 Stop The World 的](https://tech.meituan.com/2016/09/23/g1.html#g1-gc%E6%A8%A1%E5%BC%8F)。
 
-Young GC：选定所有年轻代里的 Region。通过控制年轻代的 region 个数，即年轻代内存大小，来控制 young GC 的时间开销。
+**Young GC：选定所有年轻代里的 Region。通过控制年轻代的 region 个数，即年轻代内存大小，来控制 young GC 的时间开销。**
 
-Mixed GC：选定所有年轻代里的 Region，外加根据 global concurrent marking 统计得出收集收益高的若干老年代 Region。在用户指定的开销目标范围内尽可能选择收益高的老年代 Region。
+**Mixed GC：**
 
-Mixed GC 不是 full GC，它只能回收部分老年代的 Region，如果 mixed GC 实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行 Mixed GC，就会使用 serial old GC（full GC）来收集整个 GC heap。所以我们可以知道，G1 本身是不提供 full GC 的。
+- **选定所有年轻代里的 Region，外加根据 global concurrent marking 统计得出收集收益高的若干老年代 Region。在用户指定的开销目标范围内尽可能选择收益高的老年代 Region。**
+- 混合コレクションでは、G1 GCは混合ガベージ・コレクションの目標回数、ヒープの各リージョン内のライブ・オブジェクトの割合、およびヒープの未使用領域全体の許容割合に基づいて、収集される古いリージョンの数を調整します。
 
-global concurrent marking 的执行过程类似CMS，但是不同的是，在G1 GC中，它主要是为Mixed GC提供标记服务的，并不是一次GC过程的一个必须环节。
+> 可以参考本文的 [GC Cycle](#gc-cycle)
+
+<u>Mixed GC 不是 full GC，它只能回收部分老年代的 Region</u>，**如果 Mixed GC 实在无法跟上程序分配内存的速度，导致老年代填满无法继续进行 Mixed GC，就会使用 serial old GC（full GC）来收集整个 GC heap**。所以我们可以知道，<u>G1 本身是不提供 full GC 的</u>。
+
+Global Concurrent Marking 的执行过程类似 CMS，但是不同的是，在G1 GC中，它主要是为 Mixed GC 提供标记服务的，并不是一次 GC 过程的一个必须环节。
 
 Global Concurrent Marking 的执行过程分为四个步骤：
 
-1. 初始标记（Initial mark，STW）：标记了从 GC Root 开始直接可达的对象
-2. 并发标记（Concurrent Marking）：这个阶段从 GC Root 开始对 heap 中的对象标记，标记线程与应用程序线程并行执行，并且收集各个 Region 的存活对象信息
-3. 最终标记（Remark，STW）：标记那些在并发标记阶段发生变化的对象，将被回收
-4. 清除垃圾（Cleanup）：清除空没有存活对象的 Region，加入到free list
+1. **初始标记（Initial mark，STW）**：<u>标记了从 GC Root 开始直接可达的对象和所在 Region，一般和 YGC 同时发生，利用了 YGC 的 STW</u>
+2. **并发标记（Concurrent Marking）**：这个阶段<u>从 GC Root 开始对**整个 heap** 中的对象标记</u>，标记线程与应用程序线程并行执行，并且收集各个 Region 的存活对象信息
+3. **重新标记（Remark，STW）**：也是<u>**扫描整个 Heap**，标记那些在并发标记阶段发生变化的对象，并将它们回收</u>。因为初始标记阶段使用了 SATB，所以这里重新标记的速度会很快。
+4. **清除垃圾 / 复制（Cleanup / Copying）**：<u>清空没有存活对象的 Region，加入到 free list</u>；<u>将所有 Young Gen 和对象存活率较低的 Old Gen 的 regions 组成 CSets，进行复制清理</u>
 
 第一阶段 initial mark 共用了 Young GC 的 Pause，这是因为 root scan 操作可以被复用，所以可以说 global concurrent marking 是伴随 Young GC 而发生的。
 
@@ -874,11 +951,13 @@ Spurious high Update RS times in combination with the application allocating lar
 
 Scan RS Time is also determined by the amount of compression that G1 performs to keep remembered set storage size low. The more compact the remembered set is stored in memory, the more time it takes to retrieve the stored values during garbage collection. G1 automatically performs this compression, called remembered set coarsening, while updating the remembered sets depending on the current size of that region's remembered set. Particularly at the highest compression level, retrieving the actual data can be very slow. The option `-XX:G1SummarizeRSetStatsPeriod` in combination with `gc+remset=trace` level logging shows if this coarsening occurs. If so, then the `X` in the line `Did <X> coarsenings` in the *Before GC Summary* section shows a high value. The `-XX:G1RSetRegionEntries` option could be increased significantly to decrease the amount of these coarsenings. Avoid using this detailed remembered set logging in production environments as collecting this data can take a significant amount of time.
 
-
-
 ## Tuning for Throughput
 
 G1's default policy tries to maintain a balance between throughput and latency; however, there are situations where higher throughput is desirable. Apart from decreasing the overall pause-times as described in the previous sections, the frequency of the pauses could be decreased. The main idea is to increase the maximum pause time by using `-XX:MaxGCPauseMillis`. The generation sizing heuristics will automatically adapt the size of the young generation, which directly determines the frequency of pauses. If that does not result in expected behavior, particularly during the space-reclamation phase, increasing the minimum young generation size using `-XX:G1NewSizePercent` will force G1 to do that.
+
+> 一時停止時間目標：
+>
+> G1の一時停止時間目標は、フラグ`MaxGCPauseMillis`で設定します。G1は予測モデルを使用して、指定された目標一時停止時間内に実行可能なガベージ・コレクションの作業量を判断します。G1では、コレクションの最後に、次回のコレクションで収集するリージョン(コレクション・セット)を選択します。そのコレクション・セットには若いリージョンが含まれ、その合計サイズによって、論理的な若い世代のサイズが決まります。これは、G1がGC一時停止の長さを制御しているコレクションの、若いリージョンの設定数によって、ある程度決まっています。他のガベージ・コレクタと同様に、若い世代のサイズはコマンド行で指定できますが、そうすることによってG1が目標一時停止時間を達成できなくなる可能性があります。一時停止時間目標の他に、一時停止の実行間隔を指定することも可能です。一時停止時間目標とともに、この時間範囲(`GCPauseIntervalMillis`)での最小ミューテータ使用率も指定できます。`MaxGCPauseMillis`のデフォルト値は200ミリ秒です。`GCPauseIntervalMillis`のデフォルト値(0)は、時間範囲に要件がない場合と同等です。
 
 In some cases, `-XX:G1MaxNewSizePercent`, the maximum allowed young generation size, may limit throughput by limiting young generation size. This can be diagnosed by looking at region summary output of `gc+heap=info` logging. In this case the combined percentage of Eden regions and Survivor regions is close to `-XX:G1MaxNewSizePercent` percent of the total number of regions. Consider increasing`-XX:G1MaxNewSizePercent` in this case.
 
@@ -916,6 +995,12 @@ Note: `<ergo>` means that the actual value is determined ergonomically depending
 
 
 # JVM Performance Tuning：Java 虚拟机调优
+
+拓展阅读：
+
+- [Garbage Collection](https://docs.oracle.com/cd/E15523_01/web.1111/e13814/jvm_tuning.htm#PERFM154)
+- [jvm调优](https://wangkang007.gitbooks.io/jvm/content/4jvmdiao_you.html)
+- [从实际案例聊聊Java应用的GC优化](https://tech.meituan.com/2017/12/29/jvm-optimize.html)
 
 ## JVM 调优目标：减少 STW
 
