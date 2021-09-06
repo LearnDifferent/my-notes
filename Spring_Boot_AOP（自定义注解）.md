@@ -18,7 +18,7 @@
 
 几何学中，`面 = 点 + 相同点性质` ，比如：桌面由有木头属性的点组成。
 
-在编程中，假设有 UserServiceImpl、OrderServiceImpl 和  ProductServiceImpl，这三个 S ervice 实现类中，都有需要加上某个功能的方法。
+在编程中，假设有 UserServiceImpl、OrderServiceImpl 和  ProductServiceImpl，这三个 Service 实现类中，都有需要加上某个功能的方法。
 
 所以，这三个类中的每个方法，都类似于 *点* ，都具有相同的性质（这个性质，指的是需要添加的功能）。
 
