@@ -665,6 +665,16 @@ pick d48eb21 需要被修改的commit之后的commit
 需要被修改的commit，后面再添加半句新的commit信息
 ```
 
+## 修改 log 记录中的第一个 commit
+
+因为需要以第一条 commit 之前的 commit 作为基底，而这样的 commit 是无法使用 `git log` 查看的，所以这里使用的命令是：
+
+```bash
+git rebase -i --root
+```
+
+剩下的，就是根据需求修改即可。
+
 ## 将连续多个 commit 合成一个 commit
 
 这个也要使用 rebase：
