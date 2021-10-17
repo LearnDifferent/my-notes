@@ -310,6 +310,12 @@ git push [origin] [branch的名称]
 git push [origin] :[远程branch名称]
 ```
 
+删除远程分支后，本地可能还会缓存“已经被删除的远程分支”的信息，此时可以使用来删除缓存信息：
+
+```bash
+git remote prune origin
+```
+
 ## 本地分支的名称和远程分支的名称不同的情况
 
 在本地仓库创建一个 local_branch 分支，并连接远程的 dev 分支：
