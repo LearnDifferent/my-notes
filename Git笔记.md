@@ -310,6 +310,12 @@ git push [origin] [branch的名称]
 git push [origin] :[远程branch名称]
 ```
 
+删除远程分支后，本地可能还会缓存“已经被删除的远程分支”的信息，此时可以使用来删除缓存信息：
+
+```bash
+git remote prune origin
+```
+
 ## 本地分支的名称和远程分支的名称不同的情况
 
 在本地仓库创建一个 local_branch 分支，并连接远程的 dev 分支：
@@ -664,6 +670,16 @@ pick d48eb21 需要被修改的commit之后的commit
 ```
 需要被修改的commit，后面再添加半句新的commit信息
 ```
+
+## 修改 log 记录中的第一个 commit
+
+因为需要以第一条 commit 之前的 commit 作为基底，而这样的 commit 是无法使用 `git log` 查看的，所以这里使用的命令是：
+
+```bash
+git rebase -i --root
+```
+
+剩下的，就是根据需求修改即可。
 
 ## 将连续多个 commit 合成一个 commit
 

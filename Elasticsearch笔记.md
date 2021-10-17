@@ -184,7 +184,7 @@ Kibana 相当于一个 Elasticsearch 的开发工具。
 
 | Relational DB | Elasticsearch |
 | -- | -- |
-| Database 数据库 | Indices 索引 |
+| Databases 数据库 | Indices 索引 |
 | Tables 表 | ~~Types（弃用）~~ |
 | Rows 行 | Documents 文档 |
 | Columns 字段 | Fields |

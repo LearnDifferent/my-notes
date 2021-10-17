@@ -59,7 +59,7 @@ public class Rumenz{
 
 也就是说，Local Variable `a` 是 Object `Rumenz` 的 Reference Variable，所以 `a` 是 GC Root。
 
-当 `a=null` 时，`a` 存储的就不再是 `Rumenz` 所在的内存地址了，所以 `Rumenz` 没有指向 `a` 这个 GC Root，`Rumenz` 将会被回收。
+当 `a = null` 时，`a` 存储的就不再是 `Rumenz` 所在的内存地址了，所以 `Rumenz` 没有指向 `a` 这个 GC Root，`Rumenz` 将会被回收。
 
 ***
 
