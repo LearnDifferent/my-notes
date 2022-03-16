@@ -691,7 +691,7 @@ class nonCitizen extends Passenger {
 
 所有异常都是 `Throwable` 类或者其子类的实例。
 
-`Throwable` 有两大直接子：
+`Throwable` 有两大直接子类：
 
 - `Error` ：
 	- 涵盖程序不应捕获的异常
@@ -1121,7 +1121,7 @@ CARD_TABLE [this address >> 9] = DIRTY;
 
 如果同时有两个 Java 线程，在这 32KB 内存中进行引用更新操作，那么也将造成存储卡表的同一部分的缓存行的写回、无效化或者同步操作，因而间接影响程序性能。
 
-为此，HotSpot 引入了一个新的参数 -XX:+UseCondCardMark，来尽量减少写卡表的操作。其伪代码如下所示：
+为此，HotSpot 引入了一个新的参数 `-XX:+UseCondCardMark` ，来尽量减少写卡表的操作。其伪代码如下所示：
 
 ```
 if ( CARD_TABLE [this address >> 9] != DIRTY )
@@ -1153,7 +1153,7 @@ Reference Counting 具体实现：
 
 因此，这些循环引用对象所占据的空间将不可回收，从而造成了 **内存泄露**
 
-目前 JVM 的主流垃圾回收器采取的是 **可达性分析算法** ，这个算法的实质是：
+目前 JVM 的主流垃圾回收器采取的是 **可达性分析算法（Reachability Analysis）** ，这个算法的实质是：
 
 - 将一系列 GCRoots 作为初始的 Live Set（存活对象合集）
 - 然后从该 Live Set 出发，探索所有能够被该 Live Set 引用到的对象，并将其加入到该集合中
