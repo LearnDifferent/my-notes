@@ -4,7 +4,7 @@
 
 根据官网的提示安装。
 
-注意：Mac 使用了 Linux 虚拟机来安装 Docker，如果想打开安装目录 ~~，需要 docker run -it --privileged --pid=host ubuntu nsenter -t 1 -m -u -n -i sh （如果只是运行一次，可以加上 --rm），如果不想用 ubuntu，或者想指定版本，可以先 docker pull centos:7.5.1804，然后把 ubuntu 改为 centos:7.5.1804，~~ 参考：
+注意：Mac 使用了 Linux 虚拟机来安装 Docker，如果想打开虚拟机的目录，可以运行一个 OS，比如：
 
 * 启动后删除：`docker run --rm -it --privileged --pid=host alpine:3.13.4 nsenter -t 1 -m -u -n -i sh`
 * 启动后不删除，后台运行：`docker run  -d -it --privileged --pid=host --name os alpine:3.13.4 nsenter -t 1 -m -u -n -i sh`
@@ -35,11 +35,6 @@ https://docker.mirrors.ustc.edu.cn
 https://cr.console.aliyun.com/
 首页点击“创建我的容器镜像” 得到一个专属的镜像加速地址，类似于“https://1234abcd.mirror.aliyuncs.com”
 
-推荐阿里云镜像加速：
-
-* 容器镜像服务 -> 镜像加速器
-* 我的加速器地址：https://th3wvjte.mirror.aliyuncs.com
-
 添加阿里云镜像加速的方式 - Linux：
 
 ```
@@ -54,7 +49,7 @@ https://cr.console.aliyun.com/
 sudo mkdir -p /etc/docker
 sudo tee /etc/docker/daemon.json <<-'EOF'
 {
-  "registry-mirrors": ["https://th3wvjte.mirror.aliyuncs.com"]
+  "registry-mirrors": ["https://1234abcd.mirror.aliyuncs.com"]
 }
 EOF
 sudo systemctl daemon-reload
@@ -78,7 +73,7 @@ Mac安装文件：http://mirrors.aliyun.com/docker-toolbox/mac/docker-for-mac/
 
 创建一台安装有Docker环境的Linux虚拟机，指定机器名称为default，同时配置Docker加速器地址。
 
-docker-machine create --engine-registry-mirror=https://th3wvjte.mirror.aliyuncs.com -d virtualbox default
+docker-machine create --engine-registry-mirror=https://1234abcd.mirror.aliyuncs.com -d virtualbox default
 查看机器的环境配置，并配置到本地，并通过Docker客户端访问Docker服务。
 
 docker-machine env default
@@ -88,9 +83,9 @@ docker info
 
 在任务栏点击 Docker Desktop 应用图标 -> Perferences，在左侧导航菜单选择 Docker Engine，在右侧输入栏编辑 json 文件。将
 
-https://th3wvjte.mirror.aliyuncs.com加到"registry-mirrors"的数组里，点击 Apply & Restart按钮，等待Docker重启并应用配置的镜像加速器。
+https://1234abcd.mirror.aliyuncs.com加到"registry-mirrors"的数组里，点击 Apply & Restart按钮，等待Docker重启并应用配置的镜像加速器。
 
-也就是：{"registry-mirrors":["https://th3wvjte.mirror.aliyuncs.com"]}
+也就是：{"registry-mirrors":["https://1234abcd.mirror.aliyuncs.com"]}
 ```
 
 ***
@@ -219,7 +214,7 @@ Unionfs 延伸出 Docker 的使用方法：
 
 `docker run -v /usr/share/index.html:ro -d nginx` 后台启动 nginx，读取宿主机的 /usr/share/index.html 静态文件，并且设定为 ro（read only）
 
-`docker start [容器ID]` 启动容器（这个容器含有之前修改过的内容）
+`docker start [容器ID]` 启动已经存在的一个容器
 
 `docker restart [容器ID]` 重启容器
 
@@ -227,7 +222,7 @@ Unionfs 延伸出 Docker 的使用方法：
 
 `docker kill [容器ID]` 强制停止该容器
 
-`docker run --rm [容器名]` 因为每运行一次，都会创建一个容器，所以使用这个命令，可以运行后自动删除该容器
+`docker run --rm [容器名]` 因为每运行一次 `run` ，都会创建一个容器，所以使用这个命令，可以 `run`  后自动删除该容器
 
 `docker rm -f [容器ID]` 强制删除该容器
 
@@ -263,15 +258,15 @@ Unionfs 延伸出 Docker 的使用方法：
 
 `docker image prune -a` 删除所有没有被其他镜像引用的镜像
 
-`docker load -i [本地镜像文件的路径.tar]` 提取被压缩的镜像，载入到 Docker（Mac 上，将 tar 文件放到 /Users/hepengzhou 目录下即可）
+`docker load -i [本地镜像文件的路径.tar]` 提取被压缩的镜像，载入到 Docker（Mac 上，将 tar 文件放到 /Users/$(用户名) 目录下即可）
 
-`docker save [镜像标识] -o [输出的路径及文件名.tar]` 压缩镜像（如果没有加路径，Mac 默认放到 /Users/hepengzhou 目录下）
+`docker save [镜像标识] -o [输出的路径及文件名.tar]` 压缩镜像（如果没有加路径，Mac 默认放到 /Users/$(用户名) 目录下）
 
 ## 信息和状态查询
 
 `docker diff [容器ID]` 查看容器的修改
 
-`docker port [容器ID]` 查看容器的端口映射
+`docker port [容器ID]` 查看正在运行的容器的端口映射
 
 `docker logs [容器ID]`
 
@@ -286,6 +281,8 @@ Unionfs 延伸出 Docker 的使用方法：
 `docker top [容器ID]` 查看容器内部运行的进程
 
 `docker inspect [容器ID]` 查看容器的元信息
+
+`docker inspect --format '{{ .NetworkSettings.IPAddress }}' [容器ID]` 查看该容器的 IP 地址
 
 # Docker 和宿主机的数据交换和文件共享
 
@@ -328,7 +325,7 @@ volume 方式 - 启动的时候，自定义（推荐）
 * 如果 volume 是空的，而 container 中的目录内有内容，那么 docker 会将 container 目录中的内容拷贝到 volume 中
 * 但是，如果 volume 中已经有内容，则会将 container 中的目录覆盖
 
-volume 方式 - 自定义后，启动的时候挂载（推荐）
+volume 方式 - 自定义后，启动的时候再挂载（推荐）
 
 * `docker volume create [自定义名称]`
 * `docker run -v [已经定义好的名称]:[容器内目录] [容器id或名称]`
@@ -491,7 +488,7 @@ Dockerfile 构建镜像的原理：
 
 * This will initialize the newly created volume with any data that exists at the specified location within the base image
 *  `VOLUME /data` ：这样可以在镜像内创建 /data 目录用于挂载：
-	* 运行容器时还可以继续挂载 mydate 这个 volume 到该容器的 /data 位置：
+	* 运行容器时还可以继续挂载 mydata 这个 volume 到该容器的 /data 位置：
 	* `docker run -d -v mydata:/data xxxx`
 * 格式为：`VOLUME [镜像内路径1] [路径2]...`
 

@@ -14,7 +14,7 @@
 version: "3" # 使用哪个版本的语法
 services:
   web: # 自定义的唯一服务名，可以随便改。注意： 服务名也是这个服务的 IP 的 host
-    container_name: web # 相当于 --name web（尽量与服务名一致）
+    container_name: web # 相当于 --name web（不是服务名！是容器名称！）
     build: # build 一个 Dockerfile 为镜像，然后启动该镜像
       context: myjar # 指定 context 目录（也可以是绝对路径 /hello/myjar）
       dockerfile: Dockerfile # 确定 Dockerfile 的名称，也可以不写这个
@@ -39,19 +39,19 @@ services:
         - ./common.env # .env 文件必须为：[大写的key]=[小写的value]
         - ./apps/web.env # 如果和前面定义的环境 key 有冲突的地方，
         - /opt/runtime_opts.env # 就以最下面这个 value 为准
-          depends_on: # 定义启动当前服务需要的依赖服务
-            - redis # 注意，一定要写服务名，而不是容器名
-          networks:
-            - mynet
+		depends_on: # 定义启动当前服务需要的依赖服务
+			- redis # 注意，一定要写服务名，而不是容器名
+		networks:
+			- mynet
   redis:
     image: redis:5.0.5
     # 省略一些配置...
     command: [ "redis-server", "--appendonly yes" ] # 相当于 CMD
     entrypoint: # 就相当于 ENTRYPOINT
-volumes: # 创建数据卷
+volumes: # 创建数据卷：如果提前创建了，就会使用提前创建的；如果没有创建，会自动创建新的
   # 假设 yml 配置文件所在的目录为 /hello，可以理解为项目名是 hello
   # 如果没有 external 的内容，该 volume 的名称就为 hello_mysqldata
-  mysqldata: # 除了这样直接声明，也可以写成：mysqldata:{}
+  mysqldata: # 除了这样直接声明，也可以写成：mysqldata:{} 或 mysqldata:
     external: true
     # external 为 true 表示使用自定义的外部卷名，也就是直接为 mysqldata
     # 但是如果定义了 external，就必须提前创建好改 volume
@@ -72,10 +72,10 @@ networks: # 创建网络配置
 docker-compose up -d
 ```
 
-查看日志（用法参考 docker 开头的命令）：
+实时查看当前目录下的 docker-compose 的服务日志（用法参考 docker 开头的命令）：
 
 ```bash
-docker-compose logs [服务名...可以有多个，如果不写表示全部]
+docker-compose logs -f [服务名...可以有多个，如果不写表示全部]
 ```
 
 如果需要指定 yml 配置文件来后台运行，需要（注意，`-f` 命令一定要在其他命令行参数的前面）：
@@ -84,7 +84,7 @@ docker-compose logs [服务名...可以有多个，如果不写表示全部]
 docker-compose -f [配置文件名称].yml up -d
 ```
 
-如果只运行其中服务名为 redis01 和 mysql01 的服务（指定启动的服务如果有依赖，那些依赖的服务也会被启动）：
+如果只运行其中服务名（注意，不是容器名，是服务名）为 redis01 和 mysql01 的服务（指定启动的服务如果有依赖，那些依赖的服务也会被启动）：
 
 ```bash
 docker-compose up redis01 mysql01
@@ -123,11 +123,11 @@ docker-compose restart [服务名...可以有多个，如果不写就是全部]
 docker-compose stop [服务名...可以有多个，如果不写就是全部]
 ```
 
-删除容器中的服务，`-f` 表示强制删除，`-v` 表示只删除数据卷（一般不要使用）：
+删除容器中已经停止的服务（如果不添加服务名，表示删除当前目录下的所有 docker-compose 服务），`-f` 表示强制删除，`-v` 表示同时删除匿名的数据卷（自定义的数据卷不会被删除）：
 
 ```bash
-docker-compose -f [服务名...]
-docker-compose -v [服务名...]
-docker-compose -fv [服务名...]
+docker-compose rm -f [服务名...]
+docker-compose rm -v [服务名...]
+docker-compose rm -fv [服务名...]
 ```
 
