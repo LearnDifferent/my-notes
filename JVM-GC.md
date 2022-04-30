@@ -151,7 +151,7 @@ Throughput：
 
 - [スループット](https://ja.wikipedia.org/wiki/%E3%82%B9%E3%83%AB%E3%83%BC%E3%83%97%E3%83%83%E3%83%88)（実効伝送速度）は、一般に単位時間当たりの処理能力のこと
 - Throughput 指 <u>application threads 的用时</u> 占据 <u>程序总用时</u> 的比例
-- 比如：<u>Throughput 为 99% 表示程序运行了 100  秒，而 application threads 运行了 99 秒，GC 线程运行运行了 1 秒</u>
+- 比如：<u>Throughput 为 99%，表示程序运行了 100  秒，而 application threads 运行了 99 秒，GC 线程运行运行了 1 秒</u>
 - [high throughput](https://docs.oracle.com/cd/E13150_01/jrockit_jvm/jrockit/geninfo/diagnos/tune_app_thruput.html) means that more transactions are executed during a given amount of time. You can also measure the throughput by measuring how long it takes to perform a specific task or calculation.
 
 [High Throughput VS Shorter GC Pause](https://zhuanlan.zhihu.com/p/100265755) ：
@@ -385,7 +385,7 @@ G1 is a **generational**, **incremental**, **parallel**, **mostly concurrent**, 
 
 G1コレクタは、いくつかの技術によって高いパフォーマンスおよび一時停止時間目標を実現します。
 
-G1 的 **Space-reclamation** （存储空间回收利用） efforts <u>concentrate on the young generation</u> where it is most efficient to do so, with occasional space-reclamation in the old generation:
+G1 的 **Space-reclamation**（存储空间回收利用）efforts <u>concentrate on the young generation</u> where it is most efficient to do so, with occasional space-reclamation in the old generation:
 
 - To keep stop-the-world pauses short for space-reclamation, G1 <u>performs space-reclamation incrementally in steps and in parallel</u>.
 

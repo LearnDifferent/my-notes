@@ -129,6 +129,10 @@ Runtime Constant Pool:
 
 Constant Pool:
 
+> 比如：String str = new String("abc"); 会 new 一个新的对象，str 指向该对象。
+>
+> 而 String str = "abc"; 会将该字符串直接放入常量池中，str 直接指向常量池中的 "abc"。
+
 - A class file keeps all its symbolic references in one place, the **constant pool** .
 - [Simply put, a **constant pool** contains the constants that are needed to run the code of a specific class](https://www.baeldung.com/jvm-constant-pool).
 - Basically, it's a runtime data structure similar to the symbol table. It is a per-class or per-interface runtime representation in a Java class file.
