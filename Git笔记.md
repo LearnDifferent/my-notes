@@ -792,7 +792,7 @@ git commit --amend --date="Sun, 25 Dec 2018 19:42:09 +0800"
 将上次的 commit 修改为当前时间：
 
 ```bash
-git commit --amend --date="$(date -R)" # 可以说这个
+git commit --amend --date="$(date -R)" # 可以是这个
 git commit --amend --date=`date -R` # 也可以是这个
 ```
 
@@ -844,7 +844,26 @@ git reflog
 git ls-files
 ```
 
+查看 git 仓库内，包含某关键词的文件：
+
+```bash
+git grep $(关键词)
+```
+
+查看指定文件每一行的提交人和提交时间：
+
+```bash
+git blame $(文件名)
+```
+
+查看指定文件的每一次提交和改动
+
+```bash
+git log -p $(文件名)
+```
+
 # git commit 提交规范
 
 - [Git Commit Message Conventions](https://docs.google.com/document/d/1QrDFcIiPjSLDn3EL15IJygNPiHORgU1_OOAqWjiDU5Y/edit#heading=h.greljkmo14y0)
 - [Commit message 和 Change log 编写指南](https://www.ruanyifeng.com/blog/2016/01/commit_message_change_log.html)
+
