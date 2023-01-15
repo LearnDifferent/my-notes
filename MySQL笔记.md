@@ -541,6 +541,70 @@ group by s.subjectName -- 根据 subjectName 来分组
 having 平均分 > 80; -- 然后要求平均分大于 80
 ```
 
+## 窗口函数
+
+**窗口函数表达式**：
+
+```sql
+function (args) over ([partition by 分组条件]  [order by 排序字段 [desc] ]  [frame] )
+```
+
+例如：
+
+- `row_number() over (order by id)` 不分组，直接按照 id 升序
+- `rank() over (partition by gender order by gender desc)` 根据 gender 排序后，再根据 gender 降序
+
+---
+
+**排序函数：**
+
+- `row_number()` 
+  - 形如：1, 2, 3 ...
+  - 序号不重复，且连续
+- `rank()` 
+  - 形如：1, 2, 2, 4, 5
+  - 序号可以重复（并列），且不连续
+- `dense_rank()`
+  - 形如：1, 2, 2, 3, 3, 4
+  - 序号可以重复（并列），且连续
+
+例如：
+
+Q：*表 Scores 的列为 id 和 score，score 表示分数。按照分数从高到低排名，如果多个分数相同，就并列名次。排名应该是连续的整数，也就是排名之间不能有空缺的数字。*（LeetCode 178）
+
+A：
+
+```sql
+select score, dense_rank over(order by score desc) as `rank` from Scores
+```
+
+
+
+Q：*表 Employee 有 id, name, salary, departmentId，表 Department 有 id 和 name。其中 Employee 表的 departmentId 对应 Department 表的 id。找到每个部门薪资最高的员工（有多个时，返回多个员工），按任意顺序返回结果。*（LeetCode 184）
+
+A：
+
+```sql
+select Department, Employee, salary from
+from (
+    select
+        d.name as Department, -- 部门名
+        e.name as Employee, -- 员工名
+        salary, -- 工资
+    	-- rank()：允许多个并列。这里也可以使用 dense_rank()
+    	-- partition by departmentId：根据部门来分组
+    	-- order by salary desc：根据工资来排序
+        rank() over(partition by departmentId order by salary desc) as salary_rank
+    from
+        Employee e
+    inner join
+        Department d on e.departmentId = d.id
+) as t -- 记得要给表一个别名
+
+where
+    salary_rank = 1; -- 只返回 按照部门分组后，每个部门薪资排名第 1 的员工
+```
+
 ## 数据库级别的 MD5 加密
 
 MD5 不可逆向破解
