@@ -541,7 +541,7 @@ group by s.subjectName -- 根据 subjectName 来分组
 having 平均分 > 80; -- 然后要求平均分大于 80
 ```
 
-## 窗口函数
+## Window Function 窗口函数
 
 **窗口函数表达式**：
 
@@ -554,9 +554,7 @@ function (args) over ([partition by 分组条件]  [order by 排序字段 [desc]
 - `row_number() over (order by id)` 不分组，直接按照 id 升序
 - `rank() over (partition by gender order by gender desc)` 根据 gender 排序后，再根据 gender 降序
 
----
-
-**排序函数：**
+### 窗口函数 + 排序函数
 
 - `row_number()` 
   - 形如：1, 2, 3 ...
@@ -578,7 +576,7 @@ A：
 select score, dense_rank over(order by score desc) as `rank` from Scores
 ```
 
-
+---
 
 Q：*表 Employee 有 id, name, salary, departmentId，表 Department 有 id 和 name。其中 Employee 表的 departmentId 对应 Department 表的 id。找到每个部门薪资最高的员工（有多个时，返回多个员工），按任意顺序返回结果。*（LeetCode 184）
 
@@ -604,6 +602,64 @@ from (
 where
     salary_rank = 1; -- 只返回 按照部门分组后，每个部门薪资排名第 1 的员工
 ```
+
+### 窗口函数 + 聚合函数
+
+一般使用 aggregate function（聚合函数）的时候，需要使用 group by 来聚合。
+
+但是如果加上了  `over()` 就不需要再聚合了。如下，列出 每个日期、每个日期的订票金额 和 总的订票数：
+
+```sql
+select booking_date, amount_tipped, sum(amount_tipped) over() from bookings;
+```
+
+这就实现了 run an aggregate function without aggregating any values。
+
+> The aggregation was performed internally behind the scenes and then the value was added for each individual entry in our table
+
+We can use aggregate functions with such window functions in a different way. So we can use the capabilities of the aggregate function, but without the aggregation of the entire table.
+
+SQL 执行结果类似于：
+
+| booking_date | amount_tipped | sum(amount_tipped) |
+| ------------ | ------------- | ------------------ |
+| 2022-01-01   | 4.1           | 25.0               |
+| 2022-01-01   | 5.9           | 25.0               |
+| 2022-01-02   | 2.2           | 25.0               |
+| 2022-01-02   | 2.8           | 25.0               |
+| 2022-01-03   | 10.0          | 25.0               |
+
+---
+
+现在加深一下对窗口函数的理解，在上面的 SQL 语句的基础上添加 `partition by booking_date` ，也就是按照订票日期来分组：
+
+```sql
+select booking_date, amount_tipped, sum(amount_tipped) over(partition by booking_date) from bookings;
+```
+
+This means we want to check if we have any equals values in the `booking_date` column, and all equal values will be the sum of the amount `amount_tipped` calculation.
+
+So for two equal dates so to say, the sum will be calculated based on these two dates.
+
+> This again, happens behind the scenes, so we don't actually reduce any input fields or any input values.
+
+SQL 执行结果类似于：
+
+| booking_date | amount_tipped | sum(amount_tipped) |
+| ------------ | ------------- | ------------------ |
+| 2022-01-01   | 4.1           | 10.0               |
+| 2022-01-01   | 5.9           | 10.0               |
+| 2022-01-02   | 2.2           | 5.0                |
+| 2022-01-02   | 2.8           | 5.0                |
+| 2022-01-03   | 10.0          | 10.0               |
+
+也就是说，如果没加 `partition by` ，`sum()` 就是求出所有行的总和，并放到每一行中。
+
+当加上 `partition by` 后，`sum()` 就是先分组，然后求出每个分组的行的总和，并放到每个分组的行上。
+
+> The window function doesn't aggregate or group the data in the table.
+>
+> It just applies this calculation behind the scenes to retrieve the sum for these equal values here.
 
 ## 数据库级别的 MD5 加密
 
