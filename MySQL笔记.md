@@ -573,7 +573,7 @@ Q：*表 Scores 的列为 id 和 score，score 表示分数。按照分数从高
 A：
 
 ```sql
-select score, dense_rank over(order by score desc) as `rank` from Scores
+select score, dense_rank() over(order by score desc) as `rank` from Scores
 ```
 
 ---
@@ -607,7 +607,7 @@ where
 
 一般使用 aggregate function（聚合函数）的时候，需要使用 group by 来聚合。
 
-但是如果加上了  `over()` 就不需要再聚合了。如下，列出 每个日期、每个日期的订票金额 和 总的订票数：
+但是如果加上了  `over()` 就不需要再聚合了。如下，列出 每个日期、每个日期的小费金额 和 总的小费金额：
 
 ```sql
 select booking_date, amount_tipped, sum(amount_tipped) over() from bookings;
@@ -660,6 +660,32 @@ SQL 执行结果类似于：
 > The window function doesn't aggregate or group the data in the table.
 >
 > It just applies this calculation behind the scenes to retrieve the sum for these equal values here.
+
+---
+
+在上面的基础上，如果加上了 `order by` ：
+
+下面的 SQL 中，booking_date 表示 预定日期，amount_tipped 表示 小费金额，amount_billed 表示 金额（这里假设数据里面的 amount_billed 和 amount_tipped 的大小相等）：
+
+```sql
+select booking_date, amount_tipped, sum(amount_tipped) over(partition by booking_date order by amount_billed) from bookings;
+```
+
+SQL 执行结果类似于：
+
+| booking_date | amount_tipped | sum(amount_tipped) |
+| ------------ | ------------- | ------------------ |
+| 2022-01-02   | 2.2           | 2.2                |
+| 2022-01-02   | 2.8           | 5.0                |
+| 2022-01-01   | 4.1           | 4.1                |
+| 2022-01-01   | 5.9           | 10.0               |
+| 2022-01-03   | 10.0          | 10.0               |
+
+当 **aggregation function** 遇上有 `partition by` 和 `order by` 的 **window function** 时，会在一个分组内，根据 `order by` 的顺序，**计算每一行的累加和**（如上所示）。
+
+> 可以这样理解，**没有加上 `order by` ，就无法顺序地展示累加的合计数，所以没有 `order by` 的时候就是把所有的总数放进去**。
+>
+> 而**加上了 `order by` ，就可以按照顺序展示合计数，所以就是累加和**。
 
 ## 数据库级别的 MD5 加密
 
