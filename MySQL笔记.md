@@ -546,8 +546,14 @@ having 平均分 > 80; -- 然后要求平均分大于 80
 **窗口函数表达式**：
 
 ```sql
-function (args) over ([partition by 分组条件]  [order by 排序字段 [desc] ]  [frame] )
+function (args) over ([partition by 分组条件]  [order by 排序字段 [desc] ]  [rows / range] )
 ```
+
+`over()` clause:
+
+- `partition by` divides the result into partitions
+- `order by` defines the logical order of the rows within each partition of the result
+- `rows / range` limits the rows within a partition by specifiying the starting and end points of a window frame
 
 例如：
 
@@ -713,11 +719,11 @@ SQL 执行结果类似于：
 
 [上文中，此答案的](#rank_window_answer)子查询就是这个道理。
 
-###  Lag / Lead
+###  Analytic Functions：Lag() / Lead()
 
-使用 `lag()` 可以获取当前行 前面的值。
+使用 `lag()` 可以 access the rows before the current row（获取当前行 前面的值）。
 
->**`lead()` 就是获取当前行 后面的的数据**。用法可以参考 `lag()` 。
+>**`lead()` 就是 access the rows after the current row（获取当前行 后面的的数据）**。用法可以参考 `lag()` 。
 
 比如，按照部门分组、根据 ID 排序，获取每个分组中，在当前 ID 的职员信息那一行中，放入前一个 ID 的职员的工资：
 
@@ -743,7 +749,11 @@ SQL 执行结果类似于：
 
 也就是获取每个窗口中，前一行相应位置的值。
 
-`lag()` 函数可以带上参数，也就是 **`lag(需要的列名, 前面第几行, null替换值)`**。
+`lag()` 函数可以带上参数，也就是 **`lag(scalar_expression, [offset], [default])`**：
+
+- scalar_expression：指定需要的数据的 column
+- offset：前面第几行，默认为 1，表示需要前面 1 行。offset can't be a negative value.
+- default：set the default value to be used if a previous (or following) row does not exist，也就是 null 的替换值
 
 比如说，需要前面第 2 行（上一行的上一行）的 salary 的值：
 
