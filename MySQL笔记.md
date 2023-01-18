@@ -663,6 +663,8 @@ SQL 执行结果类似于：
 >
 > It just applies this calculation behind the scenes to retrieve the sum for these equal values here.
 
+可以这样理解，**如果没有 `partition by` ，就是所有数据在一个窗口中进行计算。而 `partition by` 就是在每个分组的窗口中进行计算**。
+
 ---
 
 在上面的基础上，如果加上了 `order by` ：
@@ -711,7 +713,87 @@ SQL 执行结果类似于：
 
 [上文中，此答案的](#rank_window_answer)子查询就是这个道理。
 
-> 补充：如果不加 `partition by` 的话，就是没有分组，直接排序。
+###  Lag / Lead
+
+使用 `lag()` 可以获取当前行 前面的值。
+
+>**`lead()` 就是获取当前行 后面的的数据**。用法可以参考 `lag()` 。
+
+比如，按照部门分组、根据 ID 排序，获取每个分组中，在当前 ID 的职员信息那一行中，放入前一个 ID 的职员的工资：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	lag(salary) over(partition by dept_name order by emp_id) as prev_emp_salary
+from employee_table;
+```
+
+SQL 执行结果类似于：
+
+| emp_id | emp_name | dept_name | salary | prev_emp_salary |
+| ------ | -------- | --------- | ------ | --------------- |
+| 1      | James    | Finance   | 4000   | null            |
+| 2      | John     | Finance   | 5000   | 4000            |
+| 3      | Sally    | HR        | 2000   | null            |
+| 4      | Mary     | HR        | 3000   | 2000            |
+| 5      | Peter    | HR        | 1500   | 3000            |
+
+也就是获取每个窗口中，前一行相应位置的值。
+
+`lag()` 函数可以带上参数，也就是 **`lag(需要的列名, 前面第几行, null替换值)`**。
+
+比如说，需要前面第 2 行（上一行的上一行）的 salary 的值：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	lag(salary, 2) over(partition by dept_name order by emp_id) as prev_emp_salary
+from employee_table;
+```
+
+SQL 执行结果类似于：
+
+| emp_id | emp_name | dept_name | salary | prev_emp_salary |
+| ------ | -------- | --------- | ------ | --------------- |
+| 1      | James    | Finance   | 4000   | null            |
+| 2      | John     | Finance   | 5000   | null            |
+| 3      | Sally    | Finance   | 2000   | 4000            |
+| 4      | Mary     | Finance   | 3000   | 5000            |
+| 5      | Peter    | Finance   | 1500   | 2000            |
+| 6      | Tim      | HR        | 2000   | null            |
+| 7      | Johnson  | HR        | 1000   | null            |
+| 8      | Larry    | HR        | 1500   | 2000            |
+
+再比如，需要前面第 2 行（上一行的上一行）的 salary 的值，如果是 null 就替换为 0：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	lag(salary, 2, 0) over(partition by dept_name order by emp_id) as prev_emp_salary
+from employee_table;
+```
+
+SQL 执行结果类似于：
+
+| emp_id | emp_name | dept_name | salary | prev_emp_salary |
+| ------ | -------- | --------- | ------ | --------------- |
+| 1      | James    | Finance   | 4000   | 0               |
+| 2      | John     | Finance   | 5000   | 0               |
+| 3      | Sally    | Finance   | 2000   | 4000            |
+| 4      | Mary     | Finance   | 3000   | 5000            |
+| 5      | Peter    | Finance   | 1500   | 2000            |
+| 6      | Tim      | HR        | 2000   | 0               |
+| 7      | Johnson  | HR        | 1000   | 0               |
+| 8      | Larry    | HR        | 1500   | 2000            |
 
 ## 数据库级别的 MD5 加密
 
