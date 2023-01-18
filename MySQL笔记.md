@@ -552,7 +552,7 @@ function (args) over ([partition by 分组条件]  [order by 排序字段 [desc]
 例如：
 
 - `row_number() over (order by id)` 不分组，直接按照 id 升序
-- `rank() over (partition by gender order by gender desc)` 根据 gender 排序后，再根据 gender 降序
+- `rank() over (partition by gender order by gender desc)` 根据 gender 分组后，再根据 gender 降序
 
 ### 窗口函数 + 排序函数
 
@@ -565,6 +565,8 @@ function (args) over ([partition by 分组条件]  [order by 排序字段 [desc]
 - `dense_rank()`
   - 形如：1, 2, 2, 3, 3, 4
   - 序号可以重复（并列），且连续
+
+`partition by` 可以参考[下文](#rank_window_func)。
 
 例如：
 
@@ -580,7 +582,7 @@ select score, dense_rank() over(order by score desc) as `rank` from Scores
 
 Q：*表 Employee 有 id, name, salary, departmentId，表 Department 有 id 和 name。其中 Employee 表的 departmentId 对应 Department 表的 id。找到每个部门薪资最高的员工（有多个时，返回多个员工），按任意顺序返回结果。*（LeetCode 184）
 
-A：
+<span id='rank_window_answer'>A：</span>
 
 ```sql
 select Department, Employee, salary from
@@ -668,24 +670,48 @@ SQL 执行结果类似于：
 下面的 SQL 中，booking_date 表示 预定日期，amount_tipped 表示 小费金额，amount_billed 表示 金额（这里假设数据里面的 amount_billed 和 amount_tipped 的大小相等）：
 
 ```sql
-select booking_date, amount_tipped, sum(amount_tipped) over(partition by booking_date order by amount_billed) from bookings;
+select booking_date, amount_tipped, sum(amount_tipped) over(partition by booking_date order by amount_billed) as sum_added from bookings;
 ```
 
 SQL 执行结果类似于：
 
-| booking_date | amount_tipped | sum(amount_tipped) |
-| ------------ | ------------- | ------------------ |
-| 2022-01-02   | 2.2           | 2.2                |
-| 2022-01-02   | 2.8           | 5.0                |
-| 2022-01-01   | 4.1           | 4.1                |
-| 2022-01-01   | 5.9           | 10.0               |
-| 2022-01-03   | 10.0          | 10.0               |
+| booking_date | amount_tipped | sum_added |
+| ------------ | ------------- | --------- |
+| 2022-01-01   | 4.1           | 4.1       |
+| 2022-01-01   | 5.9           | 10.0      |
+| 2022-01-02   | 2.2           | 2.2       |
+| 2022-01-02   | 2.8           | 5.0       |
+| 2022-01-03   | 10.0          | 10.0      |
 
 当 **aggregation function** 遇上有 `partition by` 和 `order by` 的 **window function** 时，会在一个分组内，根据 `order by` 的顺序，**计算每一行的累加和**（如上所示）。
 
 > 可以这样理解，**没有加上 `order by` ，就无法顺序地展示累加的合计数，所以没有 `order by` 的时候就是把所有的总数放进去**。
 >
 > 而**加上了 `order by` ，就可以按照顺序展示合计数，所以就是累加和**。
+
+---
+
+如果不使用聚合函数，而是使用排序函数的话：
+
+```sql
+select booking_date, amount_tipped, row_number() over(partition by booking_date order by amount_tipped desc) as ranking from bookings;
+```
+
+<span id='rank_window_func'> 此时的 SQL 表示按照 booking_date 为分组，每个分组内，根据 amount_tipped 降序 排序。</span>
+
+SQL 执行结果类似于：
+
+| booking_date | amount_tipped | ranking |
+| ------------ | ------------- | ------- |
+| 2022-01-01   | 5.9           | 1       |
+| 2022-01-01   | 4.1           | 2       |
+| 2022-01-02   | 2.8           | 1       |
+| 2022-01-02   | 2.2           | 2       |
+| 2022-01-03   | 10.0          | 1       |
+
+[上文中，此答案的](#rank_window_answer)子查询就是这个道理。
+
+> 补充：如果不加 `partition by` 的话，就是没有分组，直接排序。
 
 ## 数据库级别的 MD5 加密
 
