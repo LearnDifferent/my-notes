@@ -719,7 +719,9 @@ SQL 执行结果类似于：
 
 [上文中，此答案的](#rank_window_answer)子查询就是这个道理。
 
-###  Analytic Functions：Lag() / Lead()
+### Analytic Functions
+
+**Lag() / Lead()**
 
 使用 `lag()` 可以 access the rows before the current row（获取当前行 前面的值）。
 
@@ -804,6 +806,65 @@ SQL 执行结果类似于：
 | 6      | Tim      | HR        | 2000   | 0               |
 | 7      | Johnson  | HR        | 1000   | 0               |
 | 8      | Larry    | HR        | 1500   | 2000            |
+
+---
+
+**first_value() / last_value()**
+
+`first_value()` 获取窗口中第一个 column 中的值，`last_value()` 获取窗口中最后一个 column 中的值。
+
+比如，获取每个部门最高薪资的员工名：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	first_value(emp_name) over(partition by dept_name order by salary desc) as highest_salary_empt_name_in_dept
+from employee_table;
+```
+
+SQL 执行结果类似于：
+
+| emp_id | emp_name | dept_name | salary | highest_salary_empt_name_in_dept |
+| ------ | -------- | --------- | ------ | -------------------------------- |
+| 1      | James    | Finance   | 4000   | John                             |
+| 2      | John     | Finance   | 5000   | John                             |
+| 3      | Sally    | HR        | 2000   | Mary                             |
+| 4      | Mary     | HR        | 3000   | Mary                             |
+| 5      | Peter    | HR        | 1500   | Mary                             |
+
+可以知道，按照部门分组后，再根据薪资降序，此时 Finance 最高的薪资是 5000，对应的员工名称是 John。
+
+同理，`last_value()` 就是获取最后一个值。
+
+**但是，这里要注意，如果 SQL 如下**：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	first_value(emp_name) over(partition by dept_name order by salary desc) as highest,
+	last_value(emp_name) over(partition by dept_name order by salary desc) as lowest,
+from employee_table;
+```
+
+SQL 执行结果类似于：
+
+| emp_id | emp_name | dept_name | salary | highest | lowest |
+| ------ | -------- | --------- | ------ | ------- | ------ |
+| 1      | James    | Finance   | 4000   | John    | James  |
+| 2      | John     | Finance   | 5000   | John    | John   |
+| 3      | Sally    | HR        | 2000   | Mary    | Sally  |
+| 4      | Mary     | HR        | 3000   | Mary    | Mary   |
+| 5      | Peter    | HR        | 1500   | Mary    | Peter  |
+
+此时，`highest` 确实是每个部门薪资最高的员工名。但是 `lowest` 却不是每个部门薪资最低的员工名。
+
+使用多次 `first_value()` / `last_value()` 后，结果却和想象中的不一样。这就要引出 [Frame Clause](#Frame_Clause) 了。
 
 ## 数据库级别的 MD5 加密
 
