@@ -693,9 +693,11 @@ SQL 执行结果类似于：
 
 当 **aggregation function** 遇上有 `partition by` 和 `order by` 的 **window function** 时，会在一个分组内，根据 `order by` 的顺序，**计算每一行的累加和**（如上所示）。
 
-> 可以这样理解，**没有加上 `order by` ，就无法顺序地展示累加的合计数，所以没有 `order by` 的时候就是把所有的总数放进去**。
+> 实际上，这是因为**加上了 `order by` 之后，会在 window 的基础上，产生下文提到的 [Frame](#Frame_Clause)**。
 >
-> 而**加上了 `order by` ，就可以按照顺序展示合计数，所以就是累加和**。
+> 对于 Frame 而言，其默认的 frame clause 就是将“当前分组的第 1 行数据，到当前行”，作为 1 个 frame 来处理。
+>
+> 也就是说，此时的聚合函数，计算的范围不是当前分组，而是当前分组再细分的一个范围。
 
 ---
 
@@ -837,9 +839,7 @@ SQL 执行结果类似于：
 
 可以知道，按照部门分组后，再根据薪资降序，此时 Finance 最高的薪资是 5000，对应的员工名称是 John。
 
-同理，`last_value()` 就是获取最后一个值。
-
-**但是，这里要注意，如果 SQL 如下**：
+**但是， <span id='frame_example'>`last_value()` 却有点不一样</span>：**
 
 ```sql
 select 
@@ -847,24 +847,67 @@ select
 	emp_name, 
 	dept_name, 
 	salary, 
-	first_value(emp_name) over(partition by dept_name order by salary desc) as highest,
-	last_value(emp_name) over(partition by dept_name order by salary desc) as lowest,
+	last_value(emp_name) over(partition by dept_name order by salary desc) as lowest_salary_empt_name_in_dept
 from employee_table;
 ```
 
 SQL 执行结果类似于：
 
-| emp_id | emp_name | dept_name | salary | highest | lowest |
-| ------ | -------- | --------- | ------ | ------- | ------ |
-| 1      | James    | Finance   | 4000   | John    | James  |
-| 2      | John     | Finance   | 5000   | John    | John   |
-| 3      | Sally    | HR        | 2000   | Mary    | Sally  |
-| 4      | Mary     | HR        | 3000   | Mary    | Mary   |
-| 5      | Peter    | HR        | 1500   | Mary    | Peter  |
+| emp_id | emp_name | dept_name | salary | lowest_salary_empt_name_in_dept |
+| ------ | -------- | --------- | ------ | ------------------------------- |
+| 1      | James    | Finance   | 4000   | James                           |
+| 2      | John     | Finance   | 5000   | James                           |
+| 3      | Sally    | HR        | 2000   | Sally                           |
+| 4      | Mary     | HR        | 3000   | Sally                           |
+| 5      | Peter    | HR        | 1500   | Peter                           |
 
-此时，`highest` 确实是每个部门薪资最高的员工名。但是 `lowest` 却不是每个部门薪资最低的员工名。
+此时，HR 部门最低工资的应该是 Peter，但是直到最后 1 行，才计算出 Peter 是工资最低的。这就要引出 [Frame Clause](#Frame_Clause) 了。
 
-使用多次 `first_value()` / `last_value()` 后，结果却和想象中的不一样。这就要引出 [Frame Clause](#Frame_Clause) 了。
+### <span id='Frame_Clause'>Frame Clause</span>
+
+**A frame is a subset of a partition. Frame 是窗口内部的”窗口“。**
+
+对于使用了 `over(order by)` 的 window function 而言，其**默认的 frame clause 是 `range between unbounded preceding and current row`**。即，如下所示：
+
+```sql
+【function()】 over(【 order by ...】 range between unbounded preceding and current row)
+```
+
+以 [上文中的 SQL](#frame_example) 为例，其等价于：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	last_value(emp_name) over(
+    partition by dept_name 
+    order by salary desc
+    range between unbounded preceding and current row
+  ) as lowest_salary_empt_name_in_dept
+from employee_table;
+```
+
+也就是说，这个 SQL 默认是计算 当前部门的分组里面，第 1 行，到当前行的这个 frame 里面的最低工资。
+
+如果要计算 当前部门的分组里面，所有行的最低工资，需要改为：
+
+```sql
+select 
+	emp_id, 
+	emp_name, 
+	dept_name, 
+	salary, 
+	last_value(emp_name) over(
+    partition by dept_name 
+    order by salary desc
+    range between unbounded preceding and unbounded following
+  ) as lowest_salary_empt_name_in_dept
+from employee_table;
+```
+
+也就是将 frame clause 改为 `range between unbounded preceding and unbounded following`
 
 ## 数据库级别的 MD5 加密
 
