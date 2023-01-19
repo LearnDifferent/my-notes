@@ -907,7 +907,92 @@ select
 from employee_table;
 ```
 
-也就是将 frame clause 改为 `range between unbounded preceding and unbounded following`
+也就是将 frame clause 改为 `range between unbounded preceding and unbounded following`。
+
+Frame clause 除了上面的 `range` 参数，还有 `rows` 参数。
+
+---
+
+**Frame clause 定义**：
+
+- `rows` or `range` argument in `over()` clause can **limit the rows within a partition by specifiying the starting and end points of a window frame**.
+- This way we can **create fixed size windows which can be used to computing moving averages or running totals with a limited number of rows**.
+- If we don't specify the argument, **the default value is from the start of the window frame to the current row**. 也就是 `range between unbounded preceding and current row`
+
+**Frame clause 中，`rows` 和 `range` 的不同**：
+
+- `row` specifies **a fixed number of rows** that precede or follow the current row
+- `range` specifies **the range of values** with repect to the value of the current row
+
+假设 `select * from phone` 的结果是：
+
+| brand   | product  | price |
+| ------- | -------- | ----- |
+| Apple   | iPhone   | 5999  |
+| Samsung | Galaxy S | 5899  |
+| Xiaomi  | Mix      | 3899  |
+| OPPO    | Find     | 3899  |
+| OPPO    | Fold     | 8999  |
+
+**当使用 `rows` 参数的时候，frame 指向的 `current row` 就是 literally “当前行”（the exact current row）**：
+
+```sql
+select 
+	brand, 
+	product, 
+	price,
+	last_value(product) over(
+  	order by price desc
+  	rows between unbounded preceding and current row
+	) as least_exp_product
+from phone;
+```
+
+执行的结果类似于：
+
+| brand   | product  | price | least_exp_product |
+| ------- | -------- | ----- | ----------------- |
+| OPPO    | Fold     | 8999  | Fold              |
+| Apple   | iPhone   | 5999  | iPhone            |
+| Samsung | Galaxy S | 5899  | Galaxy S          |
+| Xiaomi  | Mix      | 3899  | Mix               |
+| OPPO    | Find     | 3899  | Find              |
+
+如结果说是，当 price 相同时，走到该行，就获取到该行为止的最后一个 price。
+
+> 也就是说， **`rows` 参数表示：按照 `order by` 的顺序走下去，走到哪里，哪里就是当前行**。
+
+---
+
+**当使用 `range` 参数的时候，frame 指向的 `current row`  是<u>值相等的多个当前行</u>**：
+
+```sql
+select 
+	brand, 
+	product, 
+	price,
+	last_value(product) over(
+  	order by price desc
+  	range between unbounded preceding and current row
+	) as least_exp_product
+from phone;
+```
+
+执行的结果类似于：
+
+| brand   | product  | price | least_exp_product |
+| ------- | -------- | ----- | ----------------- |
+| OPPO    | Fold     | 8999  | Fold              |
+| Apple   | iPhone   | 5999  | iPhone            |
+| Samsung | Galaxy S | 5899  | Galaxy S          |
+| Xiaomi  | Mix      | 3899  | Find              |
+| OPPO    | Find     | 3899  | Find              |
+
+---
+
+**Frame Clause 除了 `unbounded preceding` 、`unbounded following` 和 `current row` 之外，还可以使用 `1 preceding` 和 `2 following` 来分别表示“前 1 个”和“后 2 个”** （其他的，以此类推）。
+
+这样就可以实现 **滑动窗口**了。
 
 ## 数据库级别的 MD5 加密
 
