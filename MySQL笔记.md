@@ -719,11 +719,11 @@ SQL 执行结果类似于：
 | 2022-01-02   | 2.2           | 2       |
 | 2022-01-03   | 10.0          | 1       |
 
-[上文中，此答案的](#rank_window_answer)子查询就是这个道理。
+[上文中，此答案](#rank_window_answer)的子查询就是这个道理。
 
-### Analytic Functions
+### lag() / lead()
 
-**Lag() / Lead()**
+`lag()` and `lead()` analytic functions.
 
 使用 `lag()` 可以 access the rows before the current row（获取当前行 前面的值）。
 
@@ -809,9 +809,7 @@ SQL 执行结果类似于：
 | 7      | Johnson  | HR        | 1000   | 0               |
 | 8      | Larry    | HR        | 1500   | 2000            |
 
----
-
-**first_value() / last_value()**
+### first_value() / last_value()
 
 `first_value()` 获取窗口中第一个 column 中的值，`last_value()` 获取窗口中最后一个 column 中的值。
 
@@ -863,7 +861,7 @@ SQL 执行结果类似于：
 
 此时，HR 部门最低工资的应该是 Peter，但是直到最后 1 行，才计算出 Peter 是工资最低的。这就要引出 [Frame Clause](#Frame_Clause) 了。
 
-### <span id='Frame_Clause'>Frame Clause</span>
+### <span id='Frame_Clause'>Frame Clause</span>: Basic
 
 **A frame is a subset of a partition. Frame 是窗口内部的”窗口“。**
 
@@ -911,7 +909,7 @@ from employee_table;
 
 Frame clause 除了上面的 `range` 参数，还有 `rows` 参数。
 
----
+### Frame Clause: Syntax
 
 **Frame clause 定义**：
 
@@ -994,6 +992,55 @@ from phone;
 
 这样就可以实现 **滑动窗口**了。
 
+### Frame Clause: Window Function
+
+Frame clause 还有一种替代写法，也就是使用 Window Function。
+
+普通的写法：
+
+```sql
+select 
+	brand, 
+	product, 
+	price,
+	first_value(product) over(
+    partition by product_catagory
+  	order by price desc
+  	range between unbounded preceding and unbounded following
+	) as most_exp_product,
+	last_value(product) over(
+    partition by product_catagory
+  	order by price desc
+  	range between unbounded preceding and unbounded following
+	) as least_exp_product
+from phone
+where product_catagory = 'Phone'
+order by product_id;
+```
+
+而 Window Function 的写法为：
+
+```sql
+select 
+	brand, 
+	product, 
+	price,
+	-- 这里不是 over(...) 而是 over 加上后面 window 的别名用作窗口函数
+	first_value(product) over win as most_exp_product,
+	last_value(product) over win as least_exp_product
+from phone
+where product_catagory = 'Phone'
+-- 在 where 后面、order by 前面，可以使用：window 【window的别名】as (【窗口中的内容】)
+window win as (
+    partition by product_catagory
+  	order by price desc
+  	range between unbounded preceding and unbounded following
+	)
+order by product_id;
+```
+
+也就是将 `over()` 中的 `()` 里面的内容抽取出来放到后面。
+
 ## 数据库级别的 MD5 加密
 
 MD5 不可逆向破解
@@ -1010,7 +1057,7 @@ inert into tab_md5 values(1,'username',md5('123456'));
 select * from tab_md5 where name='username' and password=md5('123456');
 ```
 
-在 Spring Boot 中可以使用 DigestUtils.md5DigestAsHex() 来传入 byte 数组，将其转化为 MD5 加密后的字符串。
+在 Spring Boot 中可以使用 `DigestUtils.md5DigestAsHex()` 来传入 byte 数组，将其转化为 MD5 加密后的字符串。
 
 ## 查询语法的顺序
 
