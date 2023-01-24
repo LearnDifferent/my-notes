@@ -340,6 +340,93 @@ from product;
 
 如果没有加上 `range between unbounded preceding and unbounded following`，那么每个分组的前 4 行都会是 `null`。这是因为使用了默认的 `range between unbounded preceding and current row` 。
 
+### ntile()
+
+> tile 是瓷砖、瓦片的意思。
+
+`ntile(数值)` 可以将 window 中的内容，尽可能地平分为多个部分。
+
+假设 `select * from phone` 的结果是：
+
+| brand   | product      | price |
+| ------- | ------------ | ----- |
+| Apple   | iPhone Plus  | 5999  |
+| Samsung | Galaxy S     | 5899  |
+| Xiaomi  | Mix          | 3899  |
+| OPPO    | Find         | 3899  |
+| OPPO    | Fold         | 8999  |
+| Apple   | iPhone Pro   | 7999  |
+| Samsung | Galaxy Ultra | 7899  |
+
+当 SQL 如下时：
+
+```sql
+select
+	brand,
+	product,
+	price,
+	ntile(3) over() as part_no
+from phone;
+```
+
+其执行的结果如下，也就是按照正常顺序，将整个 window 分为 3 个部分并加上编号：
+
+| brand   | product      | price | part_no |
+| ------- | ------------ | ----- | ------- |
+| Apple   | iPhone Plus  | 5999  | 1       |
+| Samsung | Galaxy S     | 5899  | 1       |
+| Xiaomi  | Mix          | 3899  | 1       |
+| OPPO    | Find         | 3899  | 2       |
+| OPPO    | Fold         | 8999  | 2       |
+| Apple   | iPhone Pro   | 7999  | 3       |
+| Samsung | Galaxy Ultra | 7899  | 3       |
+
+如果搭配 `partition by` ，当 SQL 如下时：
+
+```sql
+select
+	brand,
+	product,
+	price,
+	ntile(2) over(partition by brand) as part_no
+from phone;
+```
+
+其执行的结果如下，即，分组后，将每个分组内部，分为 2 个部分并加上编号：
+
+| brand   | product      | price | part_no |
+| ------- | ------------ | ----- | ------- |
+| Apple   | iPhone Plus  | 5999  | 1       |
+| Apple   | iPhone Pro   | 7999  | 2       |
+| OPPO    | Find         | 3899  | 1       |
+| OPPO    | Fold         | 8999  | 2       |
+| Samsung | Galaxy S     | 5899  | 1       |
+| Samsung | Galaxy Ultra | 7899  | 2       |
+| Xiaomi  | Mix          | 3899  | 1       |
+
+同理，如果 SQL 只加上了 `order by` ：
+
+```sql
+select
+	brand,
+	product,
+	price,
+	ntile(3) over(order by price desc) as part_no
+from phone;
+```
+
+其执行的结果会先根据 price 倒序排序，再将排序后的结果，分为 3 组，最后加上分组的编号：
+
+| brand   | product      | price | part_no |
+| ------- | ------------ | ----- | ------- |
+| OPPO    | Fold         | 8999  | 1       |
+| Apple   | iPhone Pro   | 7999  | 1       |
+| Samsung | Galaxy Ultra | 7899  | 1       |
+| Apple   | iPhone Plus  | 5999  | 2       |
+| Samsung | Galaxy S     | 5899  | 2       |
+| OPPO    | Find         | 3899  | 3       |
+| Xiaomi  | Mix          | 3899  | 3       |
+
 ## Frame Clause
 
 ### <span id='Frame_Clause'>Frame Clause</span> 入门
