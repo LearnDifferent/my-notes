@@ -439,6 +439,10 @@ from phone;
 【function()】 over(【 order by ...】 range between unbounded preceding and current row)
 ```
 
+>等价于 `【function()】 over(【 order by ...】 range unbounded preceding)`
+>
+>也就是说，如果只有 ` 【range / rows】【unbounded / 数值】 preceding` 的话，就等价于 ` 【range / rows】 between 【unbounded / 数值】 preceding and current row`。即，可以省略 between ... and current row。
+
 以 [上文中的 SQL](#frame_example) 为例，其等价于：
 
 ```sql
