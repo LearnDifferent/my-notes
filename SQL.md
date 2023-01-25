@@ -427,6 +427,53 @@ from phone;
 | OPPO    | Find         | 3899  | 3       |
 | Xiaomi  | Mix          | 3899  | 3       |
 
+### percent_rank() / cume_dist()
+
+`percent_rank()` ：
+
+- 公式 = (当前行的排序的数值 - 1) / (总的行数 - 1)
+- 含义：求当前数值的百分位
+
+`cume_dist()`：
+
+- 公式 = (当前行的排序的数值) / (总的行数)
+- 含义：Cumulative Distribution Function，累积分布函数、分布函数
+
+假设 `select * from product_table` 的结果为：
+
+| product   | price |
+| --------- | ----- |
+| Computer  | 6000  |
+| Phone     | 3000  |
+| Earphones | 1000  |
+| Kindle    | 800   |
+| Glasses   | 1500  |
+| Keyboard  | 500   |
+| iPad      | 4000  |
+
+当 SQL 如下时：
+
+```sql
+select
+	product,
+	price,
+	percent_rank() over (order by price desc) as per_rank,
+	cume_dist() over  (order by price desc) as cu_dist
+from product_table;
+```
+
+其结果为：
+
+| product   | price | per_rank | cu_dist |
+| --------- | ----- | ---- | ---- |
+| Computer | 6000 |	0 |	0.14285714285714285 |
+| iPad	| 4000 | 0.16666666666666666 |	0.2857142857142857 |
+| Phone |	3000 | 0.3333333333333333 | 0.42857142857142855 |
+| Glasses |	1500 | 0.5 | 0.5714285714285714 |
+| Earphones | 1000 | 0.6666666666666666 | 0.7142857142857143 |
+| Kindle | 800 | 0.8333333333333334 | 0.8571428571428571 |
+| Keyboard | 500 | 1 | 1 |
+
 ## Frame Clause
 
 ### <span id='Frame_Clause'>Frame Clause</span> 入门
