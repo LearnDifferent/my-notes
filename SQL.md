@@ -659,3 +659,37 @@ order by product_id;
 ```
 
 也就是将 `over()` 中的 `()` 里面的内容抽取出来放到后面。
+
+# 常用函数
+
+## timestampdiff
+
+`timestampdiff(时间单位, 开始时间, 结束时间)`
+
+> 注意，第 2 个参数是开始时间，第 3 个参数是结束时间。计算公式为：结束时间 - 开始时间
+
+比如：`timestampdiff(minute, start_time, end_time)` 。假设数据只有一行，`start_time` 为  `2021-09-01 06:00:00`，`end_time` 为 `2021-09-01 06:05:00` ，那么求出的结果为 5，表示过了 5 分钟。
+
+# 实用技巧
+
+## 在 sum() 中，搭配 case when、使用负数
+
+slow_rank 表示按照 从慢到快 排序后的 column，fast_rank 表示按照 从快到慢 排序后的 column，used_time 表示 经过的时间（比如，5 分钟）。这里要求的 diff_between_2nd_slow_and_2nd_fast 表示第 2 慢的时间 - 第 2 快的时间：
+
+```sql
+sum(
+	case
+    	-- 这里是通过 sum 来求【第2慢的时间-第2快的时间】
+    	-- 当时间为第 2 慢 时，sum() 的时候是正数的时间
+    	-- slow_rank = 2 表示【第2慢】，used_time 表示 【第2慢的时间】
+		when slow_rank = 2 then used_time
+    	-- 当时间为第 2 快 时，sum() 的时候是负数的时间
+    	-- fast_rank = 2 表示【第2快】，-used_time 表示 【-第2快的时间】
+    	-- sum() 的时候，就是 第 2 慢 - 第 2 快
+		when fast_rank = 2 then - used_time
+    	-- 其他的值，sum() 的时候设置为 0
+		else 0
+	end
+) as diff_between_2nd_slow_and_2nd_fast
+```
+
