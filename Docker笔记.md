@@ -547,6 +547,8 @@ IDEA 连接 Docker，参考 [Docker | IntelliJ IDEA - JetBrains](https://www.jet
 
 # Docker-compose
 
+> 更多内容查看：[docker-compose相关笔记](./docker-compose相关笔记.md)
+
 ## Docker-compose 基础
 
 为什么要使用多容器方案？
