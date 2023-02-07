@@ -208,7 +208,7 @@ Unionfs 延伸出 Docker 的使用方法：
 
 * 具体的看[官网](https://hub.docker.com/)的介绍，有些需要 `-e` 定义环境
 
-`docker run --name [自定义镜像名] [原镜像名或ID]`
+`docker run --name [自定义容器名] [原镜像名或ID]`
 
 `docker run -p 8080:80 nginx` 将该 nginx 的 80 端口，映射为 docker 的 8080 端口（也就是本机的 8080 可以访问 nginx 的 80 端口）
 
