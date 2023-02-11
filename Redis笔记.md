@@ -111,6 +111,8 @@ NoSQL 特点：
 
 ## Redis 相关知识
 
+> 在线 Redis 体验：https://try.redis.io/
+
 Redis 默认有 16 个数据库：
 
 - 默认使用第 0 个数据库
