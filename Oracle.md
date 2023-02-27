@@ -1,6 +1,8 @@
 # Oracle 学习笔记
 
-## 安装部署
+## 基础知识
+
+### 安装部署
 
 摘抄自：[Docker安装Oracle_11g](https://www.jb51.net/article/208976.htm) （[原文地址](https://blog.csdn.net/qq_42021376/article/details/115444547?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522167766259016800227481245%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fblog.%2522%257D&request_id=167766259016800227481245&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~blog~first_rank_ecpm_v1~rank_v31_ecpm-1-115444547-null-null.blog_rank_default&utm_term=oracle&spm=1018.2226.3001.4450)）
 
@@ -120,7 +122,7 @@ lsnrctl status
 
 ![在这里插入图片描述](https://img.jbzj.com/file_images/article/202104/2021040708420727.png)
 
-## 基础概念和命令行
+### 基础概念和命令行
 
 Oracle Database Management System（数据库管理系统）由 Database 和 Instance 构成：
 
@@ -190,7 +192,25 @@ grant dba to first_user;
 conn first_user/firstpwd@helowin
 ```
 
+### Table 里面的约束
 
+约束的作用：
+
+- 在数据库中，我们通过**约束**来对每个字段中的数据的合法性进行规范。
+
+约束的分类：
+
+- Primary Key 主键约束
+  - 非空且不能重复
+- Unique Key 唯一性约束 / 唯一键
+  - 不能重复
+  - 可以为 null，且可以有多个 null
+- Not Null 非空约束
+  - 不能为 null
+- Check 检查约束
+  - 自定义的检查规则
+  - 比如，某个取值应该在某个范围内，默认值是什么
+- Foreign Key 外键约束
 
 
 
