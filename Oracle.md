@@ -192,6 +192,12 @@ grant dba to first_user;
 conn first_user/firstpwd@helowin
 ```
 
+查看当前用户：
+
+```bash
+show user;
+```
+
 ### Table 里面的约束
 
 约束的作用：
@@ -211,14 +217,3 @@ conn first_user/firstpwd@helowin
   - 自定义的检查规则
   - 比如，某个取值应该在某个范围内，默认值是什么
 - Foreign Key 外键约束
-
-
-
-
-
-
-
-
-
-
-
