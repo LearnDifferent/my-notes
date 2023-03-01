@@ -122,7 +122,7 @@ lsnrctl status
 
 ![在这里插入图片描述](https://img.jbzj.com/file_images/article/202104/2021040708420727.png)
 
-### 基础概念和命令行
+### 基础概念
 
 Oracle Database Management System（数据库管理系统）由 Database 和 Instance 构成：
 
@@ -142,6 +142,28 @@ Oracle Database Management System（数据库管理系统）由 Database 和 Ins
 - 用户和 table space，是多对多的关系
 
 ---
+
+**Table 里面的约束**
+
+约束的作用：
+
+- 在数据库中，我们通过**约束**来对每个字段中的数据的合法性进行规范。
+
+约束的分类：
+
+- Primary Key 主键约束
+  - 非空且不能重复
+- Unique Key 唯一性约束 / 唯一键
+  - 不能重复
+  - 可以为 null，且可以有多个 null
+- Not Null 非空约束
+  - 不能为 null
+- Check 检查约束
+  - 自定义的检查规则
+  - 比如，某个取值应该在某个范围内，默认值是什么
+- Foreign Key 外键约束
+
+### 命令行
 
 切换到 root 用户后，进入 Oracle 路径：
 
@@ -198,22 +220,18 @@ conn first_user/firstpwd@helowin
 show user;
 ```
 
-### Table 里面的约束
+查看当前表空间里面的所有表（tables）：
+```bash
+select * from tab;
+```
 
-约束的作用：
 
-- 在数据库中，我们通过**约束**来对每个字段中的数据的合法性进行规范。
 
-约束的分类：
 
-- Primary Key 主键约束
-  - 非空且不能重复
-- Unique Key 唯一性约束 / 唯一键
-  - 不能重复
-  - 可以为 null，且可以有多个 null
-- Not Null 非空约束
-  - 不能为 null
-- Check 检查约束
-  - 自定义的检查规则
-  - 比如，某个取值应该在某个范围内，默认值是什么
-- Foreign Key 外键约束
+
+
+
+
+
+
+
