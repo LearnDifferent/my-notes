@@ -271,15 +271,42 @@ varchar2(最大长度)
 
 ### Oracle 特殊 SQL（对比 MySQL）
 
-Oracle 中没有 MySQL 的 `limit`，而是使用 `rownum` 来实现。这个 `rownum` 实际上就是从 1 开始的序号。
+Oracle 中没有 MySQL 的 `limit`，而是使用 <u>`rownum` 虚拟列</u>来实现。这个 `rownum` 实际上就是每一行，从 1 开始的序号。
 
-如果只想返回表 test1 中的前 2 条数据，就直接写：
+如果只想返回 test1 表中的前 2 条数据，就直接写：
 
 ```sql
 select * from test1 where rownum <= 2;
 ```
 
-这里需要注意，**`rownum` 的后面只能接 `<` 或 `<=`**。（其实可以用 `where rownum = 1` 来返回第 1 条数据，但是因为从 `where rownum = 2` 开始就没效果了，所以就按照规范来，只能小于或小于等于）。
+> 注意：**`rownum` 的后面只能接 `<` 或 `<=`**。
+>
+> 其实可以用 `where rownum = 1` 来返回第 1 条数据，但是因为从 `where rownum = 2` 开始就没效果了，所以就按照规范来，只能小于或小于等于。
+
+如果要查询 test1 表中，第 2 条之后的数据：
+
+```sql
+select * from (
+  select rownum as rn, test1.* from test1
+) t where rn > 2;
+```
+
+> 上面要注意，因为每个新数据都会有 `rownum` ，所以这里要使用别名 `rn` 来设置子查询的 `rownum as rn` 。
+
+如果要查询 test1 表中，第 2 到 3 条数据：
+
+```sql
+select a.* from (
+  select
+  	test1.*,rownum rn
+  from test1 
+  where rownum <= 3
+) a where a.rn >= 2;
+```
+
+这样做分页，效率最高。
+
+---
 
 查询当前系统时间（相当于 MySQL 的  `select now();`）：
 
