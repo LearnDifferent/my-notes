@@ -235,10 +235,19 @@ select * from tab;
 
 varchar2：可变长度的字符串。可以存储 `1` 到 `4000` 字节（字符）的值。 
 
-创建时，必须指定字符串最大长度：
+创建时，必须指定字符串最大字节（byte）长度：
 
 ```
 varchar2(最大长度)
+
+-- 等价于：
+varchar2(最大长度 byte)
+```
+
+如果想指定最大字符（char）长度：
+
+```
+varchar2(最大长度 char)
 ```
 
 ### 约束
@@ -269,7 +278,7 @@ varchar2(最大长度)
 
 ## DML
 
-### Oracle 特殊 SQL（对比 MySQL）
+**Oracle 特殊 SQL（对比 MySQL）**
 
 Oracle 中没有 MySQL 的 `limit`，而是使用 <u>`rownum` 虚拟列</u>来实现。这个 `rownum` 实际上就是每一行，从 1 开始的序号。
 
