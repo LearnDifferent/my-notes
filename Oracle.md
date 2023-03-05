@@ -233,7 +233,7 @@ select * from tab;
 
 **varchar2**
 
-varchar2：可变长度的字符串。可以存储 `1` 到 `4000` 字节（字符）的值。 
+`varchar2`：可变长度的字符串。可以存储 `1` 到 `4000` 字节（字符）的值。 
 
 创建时，必须指定字符串最大字节（byte）长度：
 
@@ -249,6 +249,57 @@ varchar2(最大长度 byte)
 ```
 varchar2(最大长度 char)
 ```
+
+---
+
+**number**
+
+`NUMBER`：用于存储可能为负值或正值的数值
+
+语法：
+
+```
+number(精度, 位数)
+```
+
+精度：precision 表示一个数字中的位数。 范围从 `1` 到 `38`。
+
+尺度（位数）：scale 是数字中小数点右侧的位数。 范围从 `-84` 到 `127`。
+
+>例如，数字`1234.56`的精度是`6`，尺度是`2`。所以要存储这个数字，需要定义为：`NUMBER(6,2)`。
+
+> 精度和尺度都是十进制数字，可选。 
+>
+> 如果跳过精度和小数位，Oracle 使用数字的最大范围和精度。
+
+例如，下面定义了一个可以存储数值的数字，其数值范围和精度都是最大的：
+
+```sql
+number
+```
+
+定义一个精度为 `p` 的整数，可以使用下面的形式：
+
+```sql
+number(p)
+
+-- 等价于精度为 p，尺度为 0 的定点数
+number(p,0)
+```
+
+**Oracle 允许规模（位数）为负数**。例如，下面的数字将数值四舍五入到数百。
+
+```sql
+number(5,-2)
+-- 如果是 1856，插入后会得到 1900
+-- 如果是 1846，插入后会得到 1800
+-- 如果是 856，插入后会得到 900
+-- 如果是 846，插入后会得到 800
+```
+
+如果在 `number(p, s)` 列中插入数字，并且数字超过精度 `p`，则Oracle将发出错误。
+
+ 但是，如果数量超过尺度 `s`，则Oracle将对该值进行四舍五入。
 
 ### 约束
 
@@ -334,3 +385,4 @@ select nvl(id, 0) from test1; -- nvl 表示 null value
 - [2.oracle和mysql在库表操作上的区别](https://www.bilibili.com/video/BV1M34y1E7bW) 注：有[合集](https://space.bilibili.com/518627864/channel/collectiondetail?sid=433580&ctype=0)
 - [B站讲的最好的oracle数据库教程全集（2022最新版）从入门到精通 数据库实战精讲 错过必后悔（附配套资料-两天掌握oracle）](https://www.bilibili.com/video/BV1zY4y1874D)
 - [2023最新最适合Java开发人员学习的Oracle教程，从入门到工作实操](https://www.bilibili.com/video/BV1x8411M7cU)
+- [易百教程](https://www.yiibai.com/oracle)
