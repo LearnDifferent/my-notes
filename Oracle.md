@@ -122,6 +122,18 @@ lsnrctl status
 
 ![在这里插入图片描述](https://img.jbzj.com/file_images/article/202104/2021040708420727.png)
 
+---
+
+在 IDEA 上使用：
+
+1. Data Source 选择 Oracle
+2. Host 填写对应的 host
+3. Port 填写默认的端口 1521
+4. SID 填写默认的服务吗 helowin
+5. User 和 Password 填写用户名和密码
+6. 点击 Test Connection 连接
+7. 如果连接成功后，如果想要查看连接配置，可以鼠标右键后，点击 Properties。或者使用快捷键 command + i
+
 ### 基础概念
 
 Oracle Database Management System（数据库管理系统）由 Database 和 Instance 构成：
