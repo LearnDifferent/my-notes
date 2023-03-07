@@ -384,6 +384,188 @@ float(精度)
 
 **Oracle 没有自增长约束（auto_increment），但是可以使用 `create sequence` 来实现序列**。
 
+### Sequence
+
+下文来自 ChatGPT
+
+> 问：请告诉我 Oracle 数据库的 Sequence 是怎么使用的？
+
+Oracle 数据库的 Sequence 用于生成唯一的数字序列，这些数字通常用作表的主键。
+
+以下是使用 Oracle 数据库 Sequence 的步骤：
+
+1. 使用 CREATE SEQUENCE 语句创建一个 Sequence 对象，设置初始值、步长和最大值等属性。例如：
+
+```sql
+CREATE SEQUENCE seq_employee_id
+  START WITH 1
+  INCREMENT BY 1
+  MAXVALUE 999999
+  NOCYCLE
+  NOCACHE;
+```
+
+2. 在需要使用 Sequence 的表中，创建一个 Number 类型的列，用于保存 Sequence 生成的序列值。例如：
+
+```sql
+CREATE TABLE employees (
+   employee_id NUMBER(6),
+   first_name VARCHAR2(20),
+   last_name VARCHAR2(20),
+   hire_date DATE,
+   salary NUMBER(8,2)
+);
+```
+
+3. 在 INSERT 语句中通过函数 NEXTVAL() 调用 Sequence，将生成的新值插入到表中的 Number 列中。例如：
+
+```sql
+INSERT INTO employees (employee_id, first_name, last_name, hire_date, salary) 
+  VALUES(seq_employee_id.NEXTVAL, 'John', 'Doe', TO_DATE('01-JAN-2010','DD-MON-YYYY'), 5000);
+```
+
+4. 如果需要重置 Sequence 的当前值，可以使用 ALTER SEQUENCE 语句修改当前值。例如：
+
+```sql
+ALTER SEQUENCE seq_employee_id RESTART WITH 1;
+```
+
+需要注意的是，Sequence 对象是 Oracle 数据库范围内的全局对象，可以被多个表共享。因此，在使用 Sequence 时，需要谨慎考虑序列的起始值、步长、最大值等属性，以确保生成的序列值不会重复或越界。
+
+
+
+> 问：可以举例说明一下吗？
+
+是的，以下是使用 Oracle 数据库 Sequence 的一个简单例子：
+
+假设我们有一个名为 customers 的表，需要在该表中插入新记录时，自动为每个新记录生成一个唯一的 customer_id 值。
+
+1. 使用 CREATE SEQUENCE 语句创建一个 Sequence 对象：
+
+```sql
+CREATE SEQUENCE seq_customer_id
+  START WITH 1001
+  INCREMENT BY 1
+  MAXVALUE 9999
+  NOCYCLE
+  NOCACHE;
+```
+
+该 Sequence 对象的起始值为 1001，步长为 1，最大值为 9999，不允许循环，且不缓存生成的序列值。
+
+2. 在 customers 表中创建一个 Number 类型的列 customer_id，用于保存 Sequence 生成的唯一 ID 值：
+
+```sql
+CREATE TABLE customers (
+   customer_id NUMBER(4),
+   first_name VARCHAR2(20),
+   last_name VARCHAR2(20),
+   email VARCHAR2(50)
+);
+```
+
+3. 在 INSERT 语句中通过函数 NEXTVAL() 调用 Sequence，将生成的新值插入到表中的 customer_id 列中：
+
+```sql
+INSERT INTO customers (customer_id, first_name, last_name, email) 
+  VALUES(seq_customer_id.NEXTVAL, 'John', 'Doe', 'john.doe@example.com');
+```
+
+4. 执行 INSERT 语句后，可以使用 SELECT 语句查询生成的唯一 ID 值：
+
+```sql
+SELECT customer_id, first_name, last_name, email FROM customers;
+```
+
+该查询结果可能类似于：
+
+```bash
+CUSTOMER_ID   FIRST_NAME   LAST_NAME   EMAIL
+---------------------------------------------
+1001          John        Doe         john.doe@example.com
+```
+
+5. 如果需要重置 Sequence 的当前值，可以使用 ALTER SEQUENCE 语句修改当前值：
+
+```
+
+ALTER SEQUENCE seq_customer_id RESTART WITH 2001;
+```
+
+执行完该语句后，下一个 INSERT 语句将会生成 2001 的 customer_id 值。
+
+
+
+> 问：请再详细讲一下语法和参数
+
+好的，下面我详细讲解一下 Oracle 数据库 Sequence 的语法和参数：
+
+1. CREATE SEQUENCE 语法：
+
+```sql
+CREATE SEQUENCE sequence_name
+  [ INCREMENT BY increment_value ]
+  [ START WITH start_value ]
+  [ MAXVALUE max_value | NOMAXVALUE ]
+  [ MINVALUE min_value | NOMINVALUE ]
+  [ CYCLE | NOCYCLE ]
+  [ CACHE cache_value | NOCACHE ]
+  [ ORDER | NOORDER ];
+```
+
+其中：
+
+- sequence_name：必填，Sequence 对象的名称。
+- INCREMENT BY increment_value：可选，指定 Sequence 中的数字增量值，默认为 1。
+- START WITH start_value：可选，指定 Sequence 生成数字序列的起始值，默认为 1。
+- MAXVALUE max_value | NOMAXVALUE：可选，指定 Sequence 可以生成的最大值，默认为 10^27-1，也可以设置为 NOMAXVALUE 表示无最大值限制。
+- MINVALUE min_value | NOMINVALUE：可选，指定 Sequence 可以生成的最小值，默认为 1，也可以设置为 NOMINVALUE 表示无最小值限制。
+- CYCLE | NOCYCLE：可选，指定 Sequence 是否循环，默认为 NOCYCLE 不循环，也可以设置为 CYCLE 表示循环。
+- CACHE cache_value | NOCACHE：可选，指定 Oracle 服务器缓存的 Sequence 值的数量，默认为 20，也可以设置为 NOCACHE 表示不缓存。
+- ORDER | NOORDER：可选，指定 Sequence 生成数字序列的顺序，默认为 NOORDER 无顺序，也可以设置为 ORDER 表示按顺序生成。
+
+2. NEXTVAL() 函数
+
+在 INSERT 语句中，通过调用 NEXTVAL() 函数来获取 Sequence 生成的下一个数字值。NEXTVAL() 函数的语法为：
+
+```sql
+sequence_name.NEXTVAL
+```
+
+其中 sequence_name 表示创建 Sequence 对象时指定的 sequence_name。
+
+3. CURRVAL 函数
+
+在查询语句中，可以使用 CURRVAL 函数来获取 Sequence 当前的数字值。CURRVAL 函数的语法为：
+
+```sql
+sequence_name.CURRVAL
+```
+
+需要注意的是，在使用 CURRVAL 函数之前，必须先调用 NEXTVAL() 函数生成过 Sequence 的值，否则会抛出 ORA-08002 异常。
+
+4. ALTER SEQUENCE 语法
+
+使用 ALTER SEQUENCE 语句来修改 Sequence 对象的属性值，语法为：
+
+```sql
+ALTER SEQUENCE sequence_name
+  [ INCREMENT BY increment_value ]
+  [ START WITH start_value ]
+  [ MAXVALUE max_value | NOMAXVALUE ]
+  [ MINVALUE min_value | NOMINVALUE ]
+  [ CYCLE | NOCYCLE ]
+  [ CACHE cache_value | NOCACHE ];
+```
+
+其中修改的属性与 CREATE SEQUENCE 时设置的属性相同。在修改 Sequence 的当前值时，可以使用 RESTART WITH 关键字，语法为：
+
+```sql
+ALTER SEQUENCE sequence_name RESTART WITH start_value;
+```
+
+需要注意的是，RESTART WITH 语句将清除之前生成过的所有 Sequence 值，因此需要谨慎使用。
+
 ## DML
 
 **Oracle 特殊 SQL（对比 MySQL）**
@@ -442,4 +624,5 @@ select nvl(id, 0) from test1; -- nvl 表示 null value
 - [2.oracle和mysql在库表操作上的区别](https://www.bilibili.com/video/BV1M34y1E7bW) 注：有[合集](https://space.bilibili.com/518627864/channel/collectiondetail?sid=433580&ctype=0)
 - [B站讲的最好的oracle数据库教程全集（2022最新版）从入门到精通 数据库实战精讲 错过必后悔（附配套资料-两天掌握oracle）](https://www.bilibili.com/video/BV1zY4y1874D)
 - [2023最新最适合Java开发人员学习的Oracle教程，从入门到工作实操](https://www.bilibili.com/video/BV1x8411M7cU)
+- [oracletutorial.com](https://www.oracletutorial.com/)
 - [易百教程](https://www.yiibai.com/oracle)
