@@ -672,6 +672,59 @@ order by product_id;
 
 # 实用技巧
 
+## EXISTS 语法
+
+> 内容整理自 ChatGPT
+
+`EXISTS` 语法用于检查一个子查询中是否存在任何行。
+
+具体语法格式如下：
+
+```sql
+SELECT column_name(s)
+FROM table_name
+WHERE EXISTS
+(SELECT column_name FROM table_name WHERE condition);
+```
+
+其中，column_name 是要选取的列名，table_name 是要查询的表名，condition 是任何适用的限制条件。
+
+下面的例子，假设有两张表：orders 和 customers，orders 表中存储着订单信息，包括订单 ID（order_id）、客户 ID（customer_id）、订单日期（order_date）等等，customers 表中存储着客户的信息，包括客户 ID（customer_id）、客户姓名（customer_name）、联系电话（phone_number）等等。
+
+现在，我们想要查询所有已经下了订单的客户的姓名和联系电话，可以使用 EXISTS 语法实现。具体查询语句如下：
+
+```sql
+SELECT customer_name, phone_number
+FROM customers
+WHERE EXISTS
+(SELECT NULL FROM orders WHERE customers.customer_id = orders.customer_id);
+```
+
+在这个例子中，我们使用了子查询来检查 customers 表和 orders 表中是否存在相同的 customer_id，如果存在，则返回该客户的姓名和联系电话。
+
+其中，子查询返回的值是 NULL，这是因为我们只关心该子查询是否返回了任何结果，而不需要具体的值。
+
+> 个人补充：也就是说，这里直接 `select null` 是完全没问题的
+
+---
+
+如果您想查询客户是否存在订单，可以使用 hasOrder 方法：
+
+```java
+@Select("SELECT EXISTS(SELECT 1 FROM orders WHERE customer_id=#{customerId})")
+boolean hasOrder(Integer customerId);
+```
+
+在上述代码中，hasOrder 方法使用 EXISTS 子查询检查指定客户是否有订单，如果存在订单则返回 true，否则返回 false。
+
+查询结果将会映射为 Java 中的布尔值类型，即 true 或 false。
+
+> 个人补充：
+>
+> 查询在 bookmark 表中，是否有 id 为 2 的数据，可以使用：`select exists(select null from bookmark where id = 2);`
+>
+> 如果返回 1，就表示存在；返回 0 就表示不存在。
+
 ## 在 sum() 中，搭配 case when、使用负数
 
 slow_rank 表示按照 从慢到快 排序后的 column，fast_rank 表示按照 从快到慢 排序后的 column，used_time 表示 经过的时间（比如，5 分钟）。这里要求的 diff_between_2nd_slow_and_2nd_fast 表示第 2 慢的时间 - 第 2 快的时间：

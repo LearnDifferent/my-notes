@@ -566,6 +566,79 @@ ALTER SEQUENCE sequence_name RESTART WITH start_value;
 
 需要注意的是，RESTART WITH 语句将清除之前生成过的所有 Sequence 值，因此需要谨慎使用。
 
+
+
+> 问：请问 Oracle 数据库中的 Sequence 可以在多张表中使用吗？
+
+可以，一个 Sequence 在 Oracle 数据库中是一个独立的对象，可以被许多表使用。在创建表时，可以使用 SEQUENCE 通过 NEXTVAL 或 CURRVAL 获取唯一的序列号来填充表中的列。
+
+例如，可以使用以下语句对多个表指定相同的 Sequence：
+
+```sql
+CREATE SEQUENCE seq_example START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE table1 ( 
+   id NUMBER DEFAULT seq_example.NEXTVAL,
+   name VARCHAR2(50),
+   address VARCHAR2(100)
+);
+
+CREATE TABLE table2 ( 
+   id NUMBER DEFAULT seq_example.NEXTVAL,
+   description VARCHAR2(200),
+   amount NUMBER
+);
+```
+
+每次向这些表中插入一行时，Sequence 将从下一个值开始产生唯一的序列号并加以使用。
+
+个人补充：
+
+- <u>上面的 SQL 语句有问题</u>，下面会解答问题所在
+- Sequence 就是一个自增的工具，在表插入的时候使用。不管是哪张表，只要插入的时候使用了这个 Sequence，这个 Sequence 都不会清零重置，而是会继续自增下去
+
+
+
+> 问：上面这段在 Oracle 数据库中执行的时候，出现了 `[42000][984] ORA-00984: 列在此处不允许` 的异常。请问是怎么回事？
+
+在 Oracle 数据库中，不能将 `DEFAULT` 与 `SEQUENCE` 结合使用，因为 `DEFAULT` 只能接受常数、表达式或 SQL 函数，因此您必须显式调用 `SEQUENCE` 函数来获取下一个值。
+
+因此，您可以通过以下方式更改 `id` 列定义：
+
+```sql
+CREATE TABLE table1 (
+                        id NUMBER,
+                        name VARCHAR2(50),
+                        address VARCHAR2(100)
+);
+
+CREATE SEQUENCE seq_example START WITH 1 INCREMENT BY 1;
+
+INSERT INTO table1 (id, name, address)
+  VALUES (seq_example.NEXTVAL, 'John Doe', '123 Main St');
+```
+
+或者，如果您希望 `id` 自动增加，可以使用触发器：
+
+```sql
+CREATE TABLE table1 (
+                        id NUMBER,
+                        name VARCHAR2(50),
+                        address VARCHAR2(100)
+);
+
+CREATE SEQUENCE seq_example START WITH 1 INCREMENT BY 1;
+
+CREATE OR REPLACE TRIGGER table1_trigger
+BEFORE INSERT ON table1
+FOR EACH ROW
+BEGIN
+   :NEW.id := seq_example.NEXTVAL;
+END;
+
+INSERT INTO table1 (name, address) VALUES ('John Doe', '123 Main St');
+```
+
 ## DML
 
 **Oracle 特殊 SQL（对比 MySQL）**
