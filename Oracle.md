@@ -680,6 +680,22 @@ select a.* from (
 
 这样做分页，效率最高。
 
+### any / all
+
+在 Oracle 的 `any` / `all` 语法中，可以这样写：
+
+```sql
+select *
+from table1
+where id < any (2, 3, 5);
+
+select *
+from table1
+where id < all (4, 5);
+```
+
+而 MySQL 中的 `any` / `all` 不能写这样的数值，只能在里面写子查询 `select` 语句。
+
 ### 其他
 
 查询当前系统时间（相当于 MySQL 的  `select now();`）：
