@@ -208,7 +208,7 @@ Unionfs 延伸出 Docker 的使用方法：
 
 * 具体的看[官网](https://hub.docker.com/)的介绍，有些需要 `-e` 定义环境
 
-`docker run --name [自定义镜像名] [原镜像名或ID]`
+`docker run --name [自定义容器名] [原镜像名或ID]`
 
 `docker run -p 8080:80 nginx` 将该 nginx 的 80 端口，映射为 docker 的 8080 端口（也就是本机的 8080 可以访问 nginx 的 80 端口）
 
@@ -546,6 +546,8 @@ IDEA 连接 Docker，参考 [Docker | IntelliJ IDEA - JetBrains](https://www.jet
 ~~然后在 SSH configurations 那里点击 `...` 进入详细设置的选项卡，点击 `+` 按钮添加，Host 填写 IP，~~
 
 # Docker-compose
+
+> 更多内容查看：[docker-compose相关笔记](./docker-compose相关笔记.md)
 
 ## Docker-compose 基础
 

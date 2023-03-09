@@ -355,7 +355,7 @@ inner join `subject` as sub
 on r.subjectNo = sub.subjectNo;
 ```
 
-## 子查询（了解）
+## 子查询
 
 使用括号进行由里到外的嵌套查询，类似于联表查询（推荐使用联表查询）：
 
@@ -557,7 +557,7 @@ inert into tab_md5 values(1,'username',md5('123456'));
 select * from tab_md5 where name='username' and password=md5('123456');
 ```
 
-在 Spring Boot 中可以使用 DigestUtils.md5DigestAsHex() 来传入 byte 数组，将其转化为 MD5 加密后的字符串。
+在 Spring Boot 中可以使用 `DigestUtils.md5DigestAsHex()` 来传入 byte 数组，将其转化为 MD5 加密后的字符串。
 
 ## 查询语法的顺序
 
