@@ -643,6 +643,8 @@ INSERT INTO table1 (name, address) VALUES ('John Doe', '123 Main St');
 
 **Oracle 特殊 SQL（对比 MySQL）**
 
+### rownum
+
 Oracle 中没有 MySQL 的 `limit`，而是使用 <u>`rownum` 虚拟列</u>来实现。这个 `rownum` 实际上就是每一行，从 1 开始的序号。
 
 如果只想返回 test1 表中的前 2 条数据，就直接写：
@@ -678,7 +680,7 @@ select a.* from (
 
 这样做分页，效率最高。
 
----
+### 其他
 
 查询当前系统时间（相当于 MySQL 的  `select now();`）：
 
