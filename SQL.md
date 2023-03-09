@@ -670,7 +670,7 @@ order by product_id;
 
 比如：`timestampdiff(minute, start_time, end_time)` 。假设数据只有一行，`start_time` 为  `2021-09-01 06:00:00`，`end_time` 为 `2021-09-01 06:05:00` ，那么求出的结果为 5，表示过了 5 分钟。
 
-# 实用技巧
+# 实用语法
 
 ## EXISTS 语法
 
@@ -728,6 +728,8 @@ boolean hasOrder(Integer customerId);
 > 查询在 bookmark 表中，是否有 id 为 2 的数据，可以使用：`select exists(select null from bookmark where id = 2);`
 >
 > 如果返回 1，就表示存在；返回 0 就表示不存在。
+
+# 实用技巧
 
 ## 在 sum() 中，搭配 case when、使用负数
 
