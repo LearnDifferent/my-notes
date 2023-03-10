@@ -680,7 +680,7 @@ select a.* from (
 
 这样做分页，效率最高。
 
-### any / all
+### any 和 all
 
 在 Oracle 的 `any` / `all` 语法中，可以这样写：
 
@@ -695,6 +695,40 @@ where id < all (4, 5);
 ```
 
 而 MySQL 中的 `any` / `all` 不能写这样的数值，只能在里面写子查询 `select` 语句。
+
+### minus 和 intersect
+
+> 下文来自 ChatGPT
+
+Oracle 的 `minus` 语法用于从第一个查询结果中排除第二个查询结果中出现的所有行，从而得到仅存在于第一个查询结果中的行。
+
+其语法如下：
+
+```sql
+SELECT column1, column2, ... FROM table1
+MINUS
+SELECT column1, column2, ... FROM table2;
+```
+
+其中，`SELECT column1, column2, ... FROM table1` 和 `SELECT column1, column2, ... FROM table2` 分别是两个查询语句，`MINUS` 关键字用于从第一个查询结果中排除出现在第二个查询结果中的所有行。
+
+需要注意的是，`MINUS` 是 Oracle 特有的运算符，而不是标准的 SQL 运算符，因此在其他 SQL 数据库中可能不存在。
+
+---
+
+Oracle 的 `intersect` 语法用于从两个查询结果中查询出相同的行，即查询两个查询结果集中都共有的数据行。
+
+其语法如下：
+
+```sql
+SELECT column1, column2, ... FROM table1
+INTERSECT
+SELECT column1, column2, ... FROM table2;
+```
+
+其中，`SELECT column1, column2, ... FROM table1` 和 `SELECT column1, column2, ... FROM table2` 分别是两个查询语句，`INTERSECT` 关键字用于查询两个结果集中共有的行。
+
+需要注意的是，`INTERSECT` 也是 Oracle 特有的运算符，而不是标准的 SQL 运算符，因此在其他 SQL 数据库中可能不存在。
 
 ### 其他
 
