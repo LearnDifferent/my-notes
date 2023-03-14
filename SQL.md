@@ -670,6 +670,25 @@ order by product_id;
 
 比如：`timestampdiff(minute, start_time, end_time)` 。假设数据只有一行，`start_time` 为  `2021-09-01 06:00:00`，`end_time` 为 `2021-09-01 06:05:00` ，那么求出的结果为 5，表示过了 5 分钟。
 
+## ifnull / nvl
+
+> MySQL 中是 `ifnull` ，Oracle 中是 `nvl`。
+> 下文以 `ifnull` 为例。
+
+用法：ifnull(不为null时的值, 为null时的值)
+
+例子：
+
+```sql
+SELECT IFNULL(1, 0); -- returns 1
+
+SELECT IFNULL('', 1); -- returns ''
+
+select ifnull(this_is_val, 0);
+-- 当 this_is_val 不是 null 的时候，返回 this_is_val
+-- 当 this_is_val 是 null 的时候，返回 0
+```
+
 # 实用语法
 
 ## exists 语法
