@@ -180,6 +180,12 @@ sqlplus /nolog
 conn sys/root as sysdba
 ```
 
+如果要登陆普通账号，可以使用：
+
+```bash
+sqlplus username/pwd@host/service_name
+```
+
 查看当前所有的实例（Instance）：
 
 ```sql
