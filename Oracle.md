@@ -234,6 +234,19 @@ show user;
 select * from tab;
 ```
 
+查询表结构：
+
+```sql
+-- 直接查询表结构
+desc 表名; 
+
+-- 查询表结构及其注释（当前用户的表）
+select * from user_col_comments where TABLE_NAME = '表名';
+
+-- 查询表结构及其注释（所有用户的表）
+select * from all_col_comments where TABLE_NAME = '表名';
+```
+
 ## DDL
 
 > DDL: Data Definition Languages
