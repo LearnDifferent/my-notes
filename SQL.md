@@ -670,9 +670,28 @@ order by product_id;
 
 比如：`timestampdiff(minute, start_time, end_time)` 。假设数据只有一行，`start_time` 为  `2021-09-01 06:00:00`，`end_time` 为 `2021-09-01 06:05:00` ，那么求出的结果为 5，表示过了 5 分钟。
 
+## ifnull / nvl
+
+> MySQL 中是 `ifnull` ，Oracle 中是 `nvl`。
+> 下文以 `ifnull` 为例。
+
+用法：ifnull(不为null时的值, 为null时的值)
+
+例子：
+
+```sql
+SELECT IFNULL(1, 0); -- returns 1
+
+SELECT IFNULL('', 1); -- returns ''
+
+select ifnull(this_is_val, 0);
+-- 当 this_is_val 不是 null 的时候，返回 this_is_val
+-- 当 this_is_val 是 null 的时候，返回 0
+```
+
 # 实用语法
 
-## EXISTS 语法
+## exists 语法
 
 > 内容整理自 ChatGPT
 >
@@ -728,6 +747,82 @@ boolean hasOrder(Integer customerId);
 > 查询在 bookmark 表中，是否有 id 为 2 的数据，可以使用：`select exists(select null from bookmark where id = 2);`
 >
 > 如果返回 1，就表示存在；返回 0 就表示不存在。
+
+## any / all 语法
+
+`any` 和 `all` 的区别：
+
+1. `any` 表示满足其中一个
+
+2. `all` 要全部都满足
+
+使用上没什么区别。下文就以 `any` 为例即可。
+
+> 下文整理自 ChatGPT
+
+`ANY` 是 SQL 中的一个操作符，用于比较子查询的结果与给定值的关系。它用于过滤、匹配和比较表格中的数据。
+
+`ANY` 可以用于以下情况：
+
+1. 与比较操作符一起用于比较子查询的结果和一个值：
+
+   例如：查找表格中销售量大于任意单个业绩表中相应的值的产品。以下是一个示例查询：
+
+```sql
+SELECT *
+FROM products
+WHERE units_sold > ANY (
+   SELECT sales_units
+   FROM quarterly_sales
+   WHERE quarter = '2021-Q1'
+);
+```
+
+这将检查表格中的每个行，如果其销售量高于 2021 年第一季度业绩表格中的任何一个单元的值，则返回行。
+
+> 个人补充：这是最基本的用法，MySQL 和 Oracle 都支持
+
+2. 类似 `IN` 运算符，用于查询满足条件的数据。
+
+   例如：查询表格中所有订单的客户名，如果客户名在指定列表中，且订单数量大于 20。以下是一个示例查询：
+
+```sql
+SELECT customer_name
+FROM orders
+WHERE order_quantity > 20
+AND customer_name = ANY (
+   'Alice',
+   'Bob',
+   'Charlie'
+);
+```
+
+这将返回具有订单数量大于 20 的所有客户，且客户名称是 Alice、Bob 或 Charlie 的订单。
+
+> 个人补充：在 MySQL 中无法使用。
+
+需要注意的是，`ANY` 是比较操作符，对于不同的 SQL 实现，其语法和具体语义可能会有所不同。因此，应该根据具体情况学习如何正确使用 `ANY`。
+
+---
+
+个人总结：
+
+1. `any` 语法可以搭配（`>` , `!=` 和 `=` 等）比较运算符，来比较 `select` 子查询中的结果，并返回符合比较结果的值
+2. 也可以不用子查询，而是直接需要比较的值列出来。这种情况下，MySQL 无法使用。
+
+## ON DUPLICATE KEY UPDATE：不能插入就更新
+
+如下面的例子（使用了 MyBatis），当 `biz_tag, user_id` 为 generate_id_tbl 表的 primary key（这里使用主键或唯一索引约束都是一样的道理）时：
+
+```sql
+insert into generate_id_tbl(biz_tag, user_id, max_id, step)
+values (#{biz_tag}, #{userId}, 3000, 1000)
+ON DUPLICATE KEY UPDATE max_id = max_id + step
+```
+
+如果 `insert` 时触发了约束，也就是出现 `DUPLICATE KEY` ，就只会执行 `update` 操作，不会 `insert` 。
+
+如果 `insert` 时没有触发 `DUPLICATE KEY` ，就执行 insert 的操作，而不执行 `update` 操作。
 
 # 实用技巧
 

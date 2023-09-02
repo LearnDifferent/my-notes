@@ -180,6 +180,12 @@ sqlplus /nolog
 conn sys/root as sysdba
 ```
 
+如果要登陆普通账号，可以使用：
+
+```bash
+sqlplus username/pwd@host/service_name
+```
+
 查看当前所有的实例（Instance）：
 
 ```sql
@@ -223,8 +229,22 @@ show user;
 ```
 
 查看当前表空间里面的所有表（tables）：
+
 ```sql
 select * from tab;
+```
+
+查询表结构：
+
+```sql
+-- 直接查询表结构
+desc 表名; 
+
+-- 查询表结构及其注释（当前用户的表）
+select * from user_col_comments where TABLE_NAME = '表名';
+
+-- 查询表结构及其注释（所有用户的表）
+select * from all_col_comments where TABLE_NAME = '表名';
 ```
 
 ## DDL
@@ -308,10 +328,10 @@ number(精度, 位数)
 
 尺度（位数）：scale 是数字中小数点右侧的位数。 范围从 `-84` 到 `127`。
 
->例如，数字`1234.56`的精度是`6`，尺度是`2`。所以要存储这个数字，需要定义为：`NUMBER(6,2)`。
+> 例如，数字`1234.56`的精度是`6`，尺度是`2`。所以要存储这个数字，需要定义为：`NUMBER(6,2)`。
 
 > 精度和尺度都是十进制数字，可选。 
->
+> 
 > 如果跳过精度和小数位，Oracle 使用数字的最大范围和精度。
 
 例如，下面定义了一个可以存储数值的数字，其数值范围和精度都是最大的：
@@ -432,8 +452,6 @@ ALTER SEQUENCE seq_employee_id RESTART WITH 1;
 
 需要注意的是，Sequence 对象是 Oracle 数据库范围内的全局对象，可以被多个表共享。因此，在使用 Sequence 时，需要谨慎考虑序列的起始值、步长、最大值等属性，以确保生成的序列值不会重复或越界。
 
-
-
 > 问：可以举例说明一下吗？
 
 是的，以下是使用 Oracle 数据库 Sequence 的一个简单例子：
@@ -488,13 +506,10 @@ CUSTOMER_ID   FIRST_NAME   LAST_NAME   EMAIL
 5. 如果需要重置 Sequence 的当前值，可以使用 ALTER SEQUENCE 语句修改当前值：
 
 ```
-
 ALTER SEQUENCE seq_customer_id RESTART WITH 2001;
 ```
 
 执行完该语句后，下一个 INSERT 语句将会生成 2001 的 customer_id 值。
-
-
 
 > 问：请再详细讲一下语法和参数
 
@@ -516,14 +531,20 @@ CREATE SEQUENCE sequence_name
 其中：
 
 - sequence_name：必填，Sequence 对象的名称。
-- INCREMENT BY increment_value：可选，指定 Sequence 中的数字增量值，默认为 1。
-- START WITH start_value：可选，指定 Sequence 生成数字序列的起始值，默认为 1。
-- MAXVALUE max_value | NOMAXVALUE：可选，指定 Sequence 可以生成的最大值，默认为 10^27-1，也可以设置为 NOMAXVALUE 表示无最大值限制。
-- MINVALUE min_value | NOMINVALUE：可选，指定 Sequence 可以生成的最小值，默认为 1，也可以设置为 NOMINVALUE 表示无最小值限制。
-- CYCLE | NOCYCLE：可选，指定 Sequence 是否循环，默认为 NOCYCLE 不循环，也可以设置为 CYCLE 表示循环。
-- CACHE cache_value | NOCACHE：可选，指定 Oracle 服务器缓存的 Sequence 值的数量，默认为 20，也可以设置为 NOCACHE 表示不缓存。
-- ORDER | NOORDER：可选，指定 Sequence 生成数字序列的顺序，默认为 NOORDER 无顺序，也可以设置为 ORDER 表示按顺序生成。
 
+- INCREMENT BY increment_value：可选，指定 Sequence 中的数字增量值，默认为 1。
+
+- START WITH start_value：可选，指定 Sequence 生成数字序列的起始值，默认为 1。
+
+- MAXVALUE max_value | NOMAXVALUE：可选，指定 Sequence 可以生成的最大值，默认为 10^27-1，也可以设置为 NOMAXVALUE 表示无最大值限制。
+
+- MINVALUE min_value | NOMINVALUE：可选，指定 Sequence 可以生成的最小值，默认为 1，也可以设置为 NOMINVALUE 表示无最小值限制。
+
+- CYCLE | NOCYCLE：可选，指定 Sequence 是否循环，默认为 NOCYCLE 不循环，也可以设置为 CYCLE 表示循环。
+
+- CACHE cache_value | NOCACHE：可选，指定 Oracle 服务器缓存的 Sequence 值的数量，默认为 20，也可以设置为 NOCACHE 表示不缓存。
+
+- ORDER | NOORDER：可选，指定 Sequence 生成数字序列的顺序，默认为 NOORDER 无顺序，也可以设置为 ORDER 表示按顺序生成。
 2. NEXTVAL() 函数
 
 在 INSERT 语句中，通过调用 NEXTVAL() 函数来获取 Sequence 生成的下一个数字值。NEXTVAL() 函数的语法为：
@@ -566,8 +587,6 @@ ALTER SEQUENCE sequence_name RESTART WITH start_value;
 
 需要注意的是，RESTART WITH 语句将清除之前生成过的所有 Sequence 值，因此需要谨慎使用。
 
-
-
 > 问：请问 Oracle 数据库中的 Sequence 可以在多张表中使用吗？
 
 可以，一个 Sequence 在 Oracle 数据库中是一个独立的对象，可以被许多表使用。在创建表时，可以使用 SEQUENCE 通过 NEXTVAL 或 CURRVAL 获取唯一的序列号来填充表中的列。
@@ -596,8 +615,6 @@ CREATE TABLE table2 (
 
 - <u>上面的 SQL 语句有问题</u>，下面会解答问题所在
 - Sequence 就是一个自增的工具，在表插入的时候使用。不管是哪张表，只要插入的时候使用了这个 Sequence，这个 Sequence 都不会清零重置，而是会继续自增下去
-
-
 
 > 问：上面这段在 Oracle 数据库中执行的时候，出现了 `[42000][984] ORA-00984: 列在此处不允许` 的异常。请问是怎么回事？
 
@@ -654,7 +671,7 @@ select * from test1 where rownum <= 2;
 ```
 
 > 注意：**`rownum` 的后面只能接 `<` 或 `<=`**。
->
+> 
 > 其实可以用 `where rownum = 1` 来返回第 1 条数据，但是因为从 `where rownum = 2` 开始就没效果了，所以就按照规范来，只能小于或小于等于。
 
 如果要查询 test1 表中，第 2 条之后的数据：
@@ -672,13 +689,69 @@ select * from (
 ```sql
 select a.* from (
   select
-  	test1.*,rownum rn
+      test1.*,rownum rn
   from test1 
   where rownum <= 3
 ) a where a.rn >= 2;
 ```
 
 这样做分页，效率最高。
+
+### any 和 all
+
+在 Oracle 的 `any` / `all` 语法中，可以这样写：
+
+```sql
+select *
+from table1
+where id < any (2, 3, 5);
+
+select *
+from table1
+where id < all (4, 5);
+```
+
+而 MySQL 中的 `any` / `all` 不能写这样的数值，只能在里面写子查询 `select` 语句。
+
+### minus 和 intersect
+
+> 下文来自 ChatGPT
+
+Oracle 的 `minus` 语法用于从第一个查询结果中排除第二个查询结果中出现的所有行，从而得到仅存在于第一个查询结果中的行。
+
+其语法如下：
+
+```sql
+SELECT column1, column2, ... FROM table1
+MINUS
+SELECT column1, column2, ... FROM table2;
+```
+
+其中，`SELECT column1, column2, ... FROM table1` 和 `SELECT column1, column2, ... FROM table2` 分别是两个查询语句，`MINUS` 关键字用于从第一个查询结果中排除出现在第二个查询结果中的所有行。
+
+需要注意的是，`MINUS` 是 Oracle 特有的运算符，而不是标准的 SQL 运算符，因此在其他 SQL 数据库中可能不存在。
+
+---
+
+Oracle 的 `intersect` 语法用于从两个查询结果中查询出相同的行，即查询两个查询结果集中都共有的数据行。
+
+其语法如下：
+
+```sql
+SELECT column1, column2, ... FROM table1
+INTERSECT
+SELECT column1, column2, ... FROM table2;
+```
+
+其中，`SELECT column1, column2, ... FROM table1` 和 `SELECT column1, column2, ... FROM table2` 分别是两个查询语句，`INTERSECT` 关键字用于查询两个结果集中共有的行。
+
+需要注意的是，`INTERSECT` 也是 Oracle 特有的运算符，而不是标准的 SQL 运算符，因此在其他 SQL 数据库中可能不存在。
+
+### || 符号
+
+`||` 符号可以用于拼接字符串，相当于 `concat()`
+
+比如：`select last_name || ' - ' || 'first_name' from member` ，可以得到类似于 `John - Jason` 的数据。
 
 ### 其他
 
