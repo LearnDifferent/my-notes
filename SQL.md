@@ -810,6 +810,20 @@ AND customer_name = ANY (
 1. `any` 语法可以搭配（`>` , `!=` 和 `=` 等）比较运算符，来比较 `select` 子查询中的结果，并返回符合比较结果的值
 2. 也可以不用子查询，而是直接需要比较的值列出来。这种情况下，MySQL 无法使用。
 
+## ON DUPLICATE KEY UPDATE：不能插入就更新
+
+如下面的例子（使用了 MyBatis），当 `biz_tag, user_id` 为 generate_id_tbl 表的 primary key（这里使用主键或唯一索引约束都是一样的道理）时：
+
+```sql
+insert into generate_id_tbl(biz_tag, user_id, max_id, step)
+values (#{biz_tag}, #{userId}, 3000, 1000)
+ON DUPLICATE KEY UPDATE max_id = max_id + step
+```
+
+如果 `insert` 时触发了约束，也就是出现 `DUPLICATE KEY` ，就只会执行 `update` 操作，不会 `insert` 。
+
+如果 `insert` 时没有触发 `DUPLICATE KEY` ，就执行 insert 的操作，而不执行 `update` 操作。
+
 # 实用技巧
 
 ## 在 sum() 中，搭配 case when、使用负数
