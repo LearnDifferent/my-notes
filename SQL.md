@@ -812,7 +812,9 @@ AND customer_name = ANY (
 
 ## ON DUPLICATE KEY UPDATE：不能插入就更新
 
-如下面的例子（使用了 MyBatis），当 `biz_tag, user_id` 为 generate_id_tbl 表的 primary key（这里使用主键或唯一索引约束都是一样的道理）时：
+如下面的例子（使用了 MyBatis），当 `biz_tag, user_id` 为 generate_id_tbl 表的 primary key（Primary Key 可以由 2 个字段组成）：
+
+> 注意，使用主键或唯一索引约束都是一样的道理
 
 ```sql
 insert into generate_id_tbl(biz_tag, user_id, max_id, step)
