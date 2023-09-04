@@ -826,6 +826,14 @@ ON DUPLICATE KEY UPDATE max_id = max_id + step
 
 如果 `insert` 时没有触发 `DUPLICATE KEY` ，就执行 insert 的操作，而不执行 `update` 操作。
 
+## insert ignore into：如果已经存在，就不插入
+
+在 `insert into` 中间加入 `ignore` ，也就是使用 `insert ignore into` 
+
+当触发 primary key 或 unique index 后，也就是有数据库中已经存在重复数据时，就不执行 `insert` 插入操作。
+
+>此时 0 row affected，在 MyBatis 中可以用 boolean（false 表示已存在），也可以用 Integer（0 表示已存在）来作为返回类型
+
 # 实用技巧
 
 ## 在 sum() 中，搭配 case when、使用负数
