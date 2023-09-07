@@ -815,6 +815,7 @@ AND customer_name = ANY (
 如下面的例子（使用了 MyBatis），当 `biz_tag, user_id` 为 generate_id_tbl 表的 primary key（Primary Key 可以由 2 个字段组成）：
 
 > 注意，使用主键或唯一索引约束都是一样的道理
+> 在 MyBatis 中使用的是 `<update>` 标签
 
 ```sql
 insert into generate_id_tbl(biz_tag, user_id, max_id, step)
@@ -833,6 +834,14 @@ ON DUPLICATE KEY UPDATE max_id = max_id + step
 当触发 primary key 或 unique index 后，也就是有数据库中已经存在重复数据时，就不执行 `insert` 插入操作。
 
 >此时 0 row affected，在 MyBatis 中可以用 boolean（false 表示已存在），也可以用 Integer（0 表示已存在）来作为返回类型
+
+## replace into：如果存在，就替换
+
+插入的时候，如果触发了 primary key 或 unique index，就先删除，再插入，也就是替换。
+
+使用方法就是将 `insert into` 改为 `replace into`
+
+> 在 MyBatis 中使用的是 `<insert>` 标签
 
 # 实用技巧
 
