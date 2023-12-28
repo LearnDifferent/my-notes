@@ -93,7 +93,19 @@
 消费者（Consumer）：
 
 - 消费者是 RocketMQ 中用来接收并处理消息的运行实体
-- 消费者通常被集成在业务系统中，从服务端获取消息，并将消息转化成业务可理解的信息，供业务逻辑处理
+- 消费者通常被集成在业务系统中，从服务端（Broker）获取消息，并将消息转化成业务可理解的信息，供业务逻辑处理
+- 注：Consumer（Consumer Group） 只能消费一个 Topic
+
+消费者组（Consumer Group）：
+
+- 消费者是以 Consumer Group 的形式存在，也就是消费者的集合
+- 意义：Consumer Group 使得消息消费更容易实现负载均衡和容错
+  - 负载均衡：
+    - 在一个 Topic 下有多个 Queue，这几个 Queue 要实现负载均衡，不堆积。下面假设是轮询策略。
+    - Producer Group 发给 Topic，Topic 轮询分配到不同的 Queue，Consumer Group 中的 Consumer 轮询消费 Queue 中的消息
+    - 也就是说，负载均衡是基于 Queue 的。
+    - 对 Queue 来说，Producer Group 发消息给 Topic，在轮询中分给每一个 Queue，然后 Consumer Group 也是轮询去消费 Queue 中的内容
+- Consumer Group 只能消费一个 Topic
 
 消费结果（ConsumeResult）：
 
