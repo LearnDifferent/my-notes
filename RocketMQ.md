@@ -105,7 +105,11 @@
     - Producer Group 发给 Topic，Topic 轮询分配到不同的 Queue，Consumer Group 中的 Consumer 轮询消费 Queue 中的消息
     - 也就是说，负载均衡是基于 Queue 的。
     - 对 Queue 来说，Producer Group 发消息给 Topic，在轮询中分给每一个 Queue，然后 Consumer Group 也是轮询去消费 Queue 中的内容
-- Consumer Group 只能消费一个 Topic
+  - 容错
+    - 还是以轮询策略为例，如果 Consumer Group 中有一个 Consumer 宕机了，剩下的 Consumers 会接着消费原 Consumer 的 Queue
+    - 因为 Topic 会重新将 Queue 平均分配给 Consumer Group 中剩下的 consumer
+- Consumer Group 只能消费一个 Topic，一个 Queue 只能被一个 Consumer 消费，但一个 Consumer 可以消费多个 Queue
+  - 把 Queue 当成骨头，Consumer 当成狗，如果一个 Queue 被多个 Consumer 消费，相当于一个骨头被多个狗争抢，会出现问题（反过来同理）
 
 消费结果（ConsumeResult）：
 
