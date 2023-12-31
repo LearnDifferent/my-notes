@@ -2,7 +2,7 @@
 
 ## RocketMQ 基础概念
 
-主题（Topic）：
+**主题（Topic）**：
 
 - RocketMQ 中消息传输和存储的顶层容器
 - 用于标识同一类业务逻辑的消息
@@ -13,7 +13,7 @@
 - 用于类型管理和安全校验
 - RocketMQ 支持的消息类型有普通消息、顺序消息、事务消息和定时/延时消息
 
-消息队列（MessageQueue）：
+**消息队列（MessageQueue）**：
 
 - 队列是 RocketMQ 中消息存储和传输的实际容器，也是消息的最小存储单元
 - 队列通过 QueueId 来做唯一标识和区分。
@@ -22,7 +22,7 @@
 - 同一个 Topic 下的一个 Queue 只能被一个 Consumer 组中的其中一个 consumer 消费
 - consumer 之间不允许竞争消费同一个 Queue，但允许能者多劳，即允许一个 Consumer 同时消费多个 Queue（一只狗可以同时吃两根以上的骨头，但是一根骨头不能给两只狗吃，因为他们会打架）
 
-消息（Message）：
+**消息（Message）**：
 
 - 消息是 RocketMQ 中的最小数据传输单元
 - 生产者将业务数据的负载和拓展属性包装成消息发送到服务端，服务端按照相关语义将消息投递到消费端进行消费
@@ -52,7 +52,7 @@
 - 消息索引是 RocketMQ 提供的面向消息的索引属性
 - 通过设置的消息索引可以快速查找到对应的消息内容
 
-消息标识（MessageId/Key）：
+**消息标识（MessageId/Key）**：
 
 - 每个消息都有唯一的 MessageId，且可以携带具有业务标识的 Key，方便查询该消息
 - Key 是由用户指定的业务相关的唯一标识
@@ -61,14 +61,14 @@
   - 当消息到达 broker 后，broker 会自动生成一个 `offsetMsgId`
 - `msgId` 、 `offsetMsgId` 和 Key 都是消息标识
 
-生产者（Producer）：
+**生产者（Producer）**：
 
 - 生产者是 RocketMQ 系统中用来构建并传输消息到服务端的运行实体
 - 生产者通常被集成在业务系统中，将业务消息按照要求封装成消息并发送至服务端
 - Producer 通过 MQ 的负载均衡模块，将消息投递到相应 Broker 集群 Queue 中
 - Producer 投递消息的过程支持快速失败和低延迟
 
-生产者组（Producer Group）：
+**生产者组（Producer Group）**：
 
 - RocketMQ 中的 producer 是以 producer group 的形式存在
 - Producer group 是同一类 producer 的集合，同一组内的 producers 能够发送的 Topic 是相同的
@@ -84,32 +84,43 @@
 - RocketMQ 中事务消息发送过程中，事务提交的状态标识，服务端通过事务状态控制事务消息是否应该提交和投递
 - 事务状态包括事务提交、事务回滚和事务未决
 
-消费者分组（ConsumerGroup）：
-
-- 消费者分组是 RocketMQ 系统中承载多个消费行为一致的消费者的负载均衡分组
-- 和消费者不同，消费者分组并不是运行实体，而是一个逻辑资源
-- 在 RocketMQ 中，通过消费者分组内初始化多个消费者实现消费性能的水平扩展以及高可用容灾
-
-消费者（Consumer）：
+**消费者（Consumer）**：
 
 - 消费者是 RocketMQ 中用来接收并处理消息的运行实体
 - 消费者通常被集成在业务系统中，从服务端（Broker）获取消息，并将消息转化成业务可理解的信息，供业务逻辑处理
 - 注：Consumer（Consumer Group） 只能消费一个 Topic
 
-消费者组（Consumer Group）：
+**消费者组（Consumer Group）**：
+
+- 重点概念：
+	- 消费者分组是 RocketMQ 系统中承载多个消费行为一致的消费者的负载均衡分组
+	- 和消费者不同，消费者分组并不是运行实体，而是一个逻辑资源
+	- 在 RocketMQ 中，通过消费者分组内初始化多个消费者实现消费性能的水平扩展以及高可用容灾
 
 - 消费者是以 Consumer Group 的形式存在，也就是消费者的集合
 - 意义：Consumer Group 使得消息消费更容易实现负载均衡和容错
   - 负载均衡：
     - 在一个 Topic 下有多个 Queue，这几个 Queue 要实现负载均衡，不堆积。下面假设是轮询策略。
     - Producer Group 发给 Topic，Topic 轮询分配到不同的 Queue，Consumer Group 中的 Consumer 轮询消费 Queue 中的消息
-    - 也就是说，负载均衡是基于 Queue 的。
+    - 也就是说，<u>负载均衡是基于 Queue 的</u>。
     - 对 Queue 来说，Producer Group 发消息给 Topic，在轮询中分给每一个 Queue，然后 Consumer Group 也是轮询去消费 Queue 中的内容
   - 容错
     - 还是以轮询策略为例，如果 Consumer Group 中有一个 Consumer 宕机了，剩下的 Consumers 会接着消费原 Consumer 的 Queue
     - 因为 Topic 会重新将 Queue 平均分配给 Consumer Group 中剩下的 consumer
-- Consumer Group 只能消费一个 Topic，一个 Queue 只能被一个 Consumer 消费，但一个 Consumer 可以消费多个 Queue
+- Consumer Group 只能消费一个 Topic，一个 Topic 中的一个 Queue 只能被一个 Consumer 消费，但一个 Consumer 可以消费多个 Queue
   - 把 Queue 当成骨头，Consumer 当成狗，如果一个 Queue 被多个 Consumer 消费，相当于一个骨头被多个狗争抢，会出现问题（反过来同理）
+
+**Name Server**：
+
+- 定义：Name Server 是一个 Broker 与 Topic 路由的注册中心，支持 Broker 的动态注册与发现
+- 主要功能：
+	- Broker 管理
+		- 接受 Broker 集群的注册信息，并将注册信息保存下来，作为路由信息的基本数据
+		- 提供 Broker 是否存活的心跳检测机制
+	- 路由信息管理
+		- 保存 Broker 集群的所有路由信息
+		- 保存 Queue 信息（队列信息），方便客户的查询
+		- Consumer 和 Producer 可以通过 NameServer 获取整个 Broker 集群的路由信息，方便了消息的投递和消费
 
 消费结果（ConsumeResult）：
 
@@ -171,5 +182,4 @@ RocketMQ 的基本流程：
 
 - 生产者生产消息，并发送至 RocketMQ 服务端
 - 消息被存储在服务端的主题中，消费者通过订阅主题消费消息
-
 
