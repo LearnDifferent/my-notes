@@ -109,19 +109,7 @@
     - 因为 Topic 会重新将 Queue 平均分配给 Consumer Group 中剩下的 consumer
 - Consumer Group 只能消费一个 Topic，一个 Topic 中的一个 Queue 只能被一个 Consumer 消费，但一个 Consumer 可以消费多个 Queue
   - 把 Queue 当成骨头，Consumer 当成狗，如果一个 Queue 被多个 Consumer 消费，相当于一个骨头被多个狗争抢，会出现问题（反过来同理）
-
-**Name Server**：
-
-- 定义：Name Server 是一个 Broker 与 Topic 路由的注册中心，支持 Broker 的动态注册与发现
-- 主要功能：
-	- Broker 管理
-		- 接受 Broker 集群的注册信息，并将注册信息保存下来，作为路由信息的基本数据
-		- 提供 Broker 是否存活的心跳检测机制
-	- 路由信息管理
-		- 保存 Broker 集群的所有路由信息
-		- 保存 Queue 信息（队列信息），方便客户的查询
-		- Consumer 和 Producer 可以通过 NameServer 获取整个 Broker 集群的路由信息，方便了消息的投递和消费
-
+  
 消费结果（ConsumeResult）：
 
 - RocketMQ 中 PushConsumer 消费监听器处理消息完成后返回的处理结果，用来标识本次消息是否正确处理
@@ -182,4 +170,39 @@ RocketMQ 的基本流程：
 
 - 生产者生产消息，并发送至 RocketMQ 服务端
 - 消息被存储在服务端的主题中，消费者通过订阅主题消费消息
+
+## Name Server
+
+定义：Name Server 是一个 Broker 与 Topic 路由的注册中心，支持 Broker 的动态注册与发现
+
+主要功能：
+
+- Broker 管理
+  - 接受 Broker 集群的注册信息，并将注册信息保存下来，作为路由信息的基本数据
+  - 提供 Broker 是否存活的心跳检测机制
+- 路由信息管理
+  - 保存 Broker 集群的所有路由信息
+  - 保存 Queue 信息（队列信息），方便客户的查询
+  - Consumer 和 Producer 可以通过 NameServer 获取整个 Broker 集群的路由信息，方便了消息的投递和消费
+
+NameServer 集群中的每个节点都是无状态：
+
+- NameServer 和其他注册与发现中心一样支持集群部署
+- NameServe 集群和其他注册与发现中心的不同点在于，NameServer 集群中的每一个 NameServer 节点都是独立的，各个节点之间不进行信息交互
+- 也就是说，当一个 Broker 向集群中的一个 NameServer 进行注册后，集群中的其他 NameServer 是不知道这个 Broker 已经在一个节点中注册了
+- 所以，当一个 Broker 启动后，这个 Broker 是会轮询 NameServer 集群中的每一个 NameServer 节点，并与每个节点建立长连接，完成注册
+- NameServer 节点内部，会维护一个 Broker 列表，用来动态存储已经连上该 NameServer 节点的 Broker 信息
+- 优点：NameServer 集群容易搭建，直接启动就行
+- 缺点：如果 NameServer 集群在扩容的时候，配置文件中没有更新最新的 NameServer 节点的地址，那么 Broker 就不会去连接最新的 NameServer 节点
+
+Broker 向 NameServer 发送心跳：
+
+- 目的：Broker 为了向 NameServer 证明存活，所以会发送心跳
+- Broker 每 30 秒，以心跳包的方式上报 NameServer，心跳包包括 BrokerId、Broker 地址（IP + Port）、Broker 名称和 Broker 所属集群等
+- NameBroker 在收到心跳包后，会更新心跳时间戳，记录这个 Broker 的最新存活时间
+
+路由剔除：
+
+- 如果 NameServer 没有收到 Broker 的心跳，NameServer 可能会将其从 Broker 列表中删除
+- NameServer 每隔 10 秒会扫描一次 Broker 列表，并检查列表中每个 Broker 最新的心跳时间戳，如果某个 Broker 的心跳时间戳距离当前超过 120 秒，就将其剔除
 
