@@ -206,3 +206,18 @@ Broker 向 NameServer 发送心跳：
 - 如果 NameServer 没有收到 Broker 的心跳，NameServer 可能会将其从 Broker 列表中删除
 - NameServer 每隔 10 秒会扫描一次 Broker 列表，并检查列表中每个 Broker 最新的心跳时间戳，如果某个 Broker 的心跳时间戳距离当前超过 120 秒，就将其剔除
 
+路由发现：
+
+- 路由发现采取 pull 模型
+- 当 Topic 的路由发生变化时，NameServer 不会主动推送给客户端，而是客户端定时去拉去 Topic 的最新路由
+- 默认是每隔 30 秒拉取一次最新的路由
+
+Client 选择 NameServer 的策略：
+
+- 客户端 Client，也就是 Producer 和 Consumer，会在配置文件中获取所有的 NameServer，然后从中选择具体连接的 NameServer 节点
+- Client 首先采取随机策略
+  - 先产生随机数
+  - 然后与配置文件中的 NameServer 节点数量取模
+  - 此时得到所要连接的 NameServer 节点索引
+  - 再进行连接
+- 如果首次连接失败，就采取轮询模式（Round-Robin 策略）
