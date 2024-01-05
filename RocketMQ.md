@@ -221,3 +221,27 @@ Client 选择 NameServer 的策略：
   - 此时得到所要连接的 NameServer 节点索引
   - 再进行连接
 - 如果首次连接失败，就采取轮询模式（Round-Robin 策略）
+
+## Broker
+
+Broker 主要是用来存储和转发消息
+
+- Broker 从 Producer 中接收消息，存储在 Broker 中
+- 当 Consumer 发出拉取的请求，Broker 会将消息转发到 Consumer 中
+
+Broker 同时也存储消息相关的元数据
+
+- 消息相关的元数据是为了消息的存储和消费提供服务的数据。例如：
+- 消费者组消费进度偏移量 offset，用于记录消息被消费了的位置
+- Topic 主题
+- Queue 队列
+
+Broker 由哪些模块构成
+
+- Remoting Module：
+  - Remoting Module 其实就是整个 Broker 的实体，负责处理来自 clients 的请求
+  - Remoting Module 的下属模块如下：
+- Client Manager
+- Store Service
+- HA Service
+- Index Service
