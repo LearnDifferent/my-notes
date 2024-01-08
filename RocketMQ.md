@@ -21,6 +21,7 @@
 - 一个 Topic 可以包含多个 Queue
 - 同一个 Topic 下的一个 Queue 只能被一个 Consumer 组中的其中一个 consumer 消费
 - consumer 之间不允许竞争消费同一个 Queue，但允许能者多劳，即允许一个 Consumer 同时消费多个 Queue（一只狗可以同时吃两根以上的骨头，但是一根骨头不能给两只狗吃，因为他们会打架）
+- 注意：Queue 是存在 Broker 中的，但是每个 Broker 可以有数量不同的 Queues，所以 RocketMQ 的负载均衡是基于 Queue 的
 
 **消息（Message）**：
 
@@ -241,7 +242,24 @@ Broker 由哪些模块构成
 - Remoting Module：
   - Remoting Module 其实就是整个 Broker 的实体，负责处理来自 clients 的请求
   - Remoting Module 的下属模块如下：
-- Client Manager
-- Store Service
-- HA Service
-- Index Service
+- Client Manager：
+  - 客户端管理器。负责接收和解析 Client（Consumer 和 Producer）的请求，并管理 Client
+  - 例如，维护 Consumer 的 Topic 订阅信息
+- Store Service：
+  - 存储服务。提供方便的 API 处理消息持久化相关的需求。
+  - 功能：<u>将消息持久化到硬盘</u> 和 <u>消息查询</u>
+- HA Service：
+  - 高可用服务 / High Available Service
+  - 功能：Broker Master 和 Broker Slave 之间的数据同步
+- Index Service：
+  - 索引服务。
+  - 功能：
+    - 根据特定的 Message Key，对投递到 Broker 的消息进行索引
+    - 根据 Message Key 快速查询消息
+
+Broker 集群：
+
+- Broker 集群是主备集群
+- 定义：一个 Master 可以有多个 Slaves，但是这些 Slaves 只负责备份，当 Master 宕机后，Slave 再接替 Master 承担工作
+- Master 和 Slave 的 BrokerName 是相同的，但是 BrokerId 不同。Master 的 BrokerId 是 0，Slave 的 BrokerId 是 1
+- Broker 集群中的每个 Broker 节点都会与 NameServer 集群中的所有 NameServer 节点建立长连接，定时注册 Topic 到 NameServer 集群中
