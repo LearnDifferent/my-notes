@@ -263,3 +263,14 @@ Broker 集群：
 - 定义：一个 Master 可以有多个 Slaves，但是这些 Slaves 只负责备份，当 Master 宕机后，Slave 再接替 Master 承担工作
 - Master 和 Slave 的 BrokerName 是相同的，但是 BrokerId 不同。Master 的 BrokerId 是 0，Slave 的 BrokerId 是 1
 - Broker 集群中的每个 Broker 节点都会与 NameServer 集群中的所有 NameServer 节点建立长连接，定时注册 Topic 到 NameServer 集群中
+
+## Topic
+
+有 2 中模式可以手动创建 Topic：
+
+- 集群模式
+  - 集群指的是 Default Cluster，也就是默认的所有 Brokers 组成的 Broker Cluster
+  - 集群模式创建 Topic 时，Default Cluster 下，每个 Broker 中的每个 Queue 的数量是相同的
+- Broker 模式
+  - 在 Broker 模式下创建 Topic，每个 Broker Cluster 中的 Queue 数量可以是不同的
+  - 自动创建的 Topic，采用的是 Broker 模式
