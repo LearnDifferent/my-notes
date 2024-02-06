@@ -45,3 +45,45 @@ byte[] bytes = sr.get();
 - 假设我们需要频繁使用一个图片文件，如果每次都从硬盘中读取该图片文件，用完后就释放，这样 IO 消耗很大
 - 我们可以使用软引用来缓存这个图片，需要的时候就从软引用 Soft Reference 中 `get()` 这个图片
 - 当内存不够的时候，JVM 会帮我们自动清理这个软引用里面的图片，等我们需要这个图片的时候，再通过 IO 读取图片文件的方式，存到软引用中（判断如果 `get()` 的结果是 `null` ，就从硬盘中读取）
+
+---
+
+**弱引用 Weak Reference**
+
+跟软引用类似，弱引用的 Java 类型是 `WeakReference`，使用方法如下：
+
+```java
+WeakReference<Object> wr = new WeakReference<>(new Object());
+```
+
+上面的 `wr` 指向的 `new WeakReference()` 还是强引用 Strong Reference， 而 `new WeakReference()` 指向的 `new Object()` 是弱引用 Weak Reference。
+
+当发生 GC 时，无论怎么样，弱引用 Weak Reference 都会被立刻清除，除非弱引用指向的对象，有其他强引用也指向它。也就是如下情况：
+
+```java
+// 情况 1：new Object 只有弱引用时，GC 会直接清理掉这个 new 出来的 Object：
+WeakReference<Object> wr1 = new WeakReference<>(new Object());
+// 能正常打印
+System.out.println(wr1.get());
+System.gc();
+// 软引用被清理，打印 null
+System.out.println(wr1.get());
+
+// 情况 2：new Object 除了弱引用之外，还有有强引用时候，GC 不会直接清理这个 Object
+Object obj = new Object();
+WeakReference<Object> wr2 = new WeakReference<>(obj);
+// 能打印
+System.out.println(wr2.get());
+System.gc();
+// 还存在强引用 obj，所以也能打印
+System.out.println(wr2.get());
+```
+
+打印的结果：
+
+```
+java.lang.Object@cb644e
+null
+java.lang.Object@13805618
+java.lang.Object@13805618
+```
