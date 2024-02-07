@@ -781,6 +781,20 @@ select sysdate from dual;
 select nvl(id, 0) from test1; -- nvl 表示 null value
 ```
 
+其他表相关的 SQL：
+
+```sql
+select * from all_col_comments where Table_Name = 'table_name';
+
+select * from all_cons_columns where CONSTRAINT_NAME = 'index name';
+
+select * from all_constraints where TABLE_NAME = upper('table_name');
+
+select * from all_objects where object_name = upper('table_name');
+
+select * from user_tab_privs;
+```
+
 ## 参考资料
 
 - [2.oracle和mysql在库表操作上的区别](https://www.bilibili.com/video/BV1M34y1E7bW) 注：有[合集](https://space.bilibili.com/518627864/channel/collectiondetail?sid=433580&ctype=0)
