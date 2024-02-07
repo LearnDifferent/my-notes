@@ -753,6 +753,20 @@ SELECT column1, column2, ... FROM table2;
 
 比如：`select last_name || ' - ' || 'first_name' from member` ，可以得到类似于 `John - Jason` 的数据。
 
+### decode
+
+除了 `case when`，Oracle 还提供 `decode()` 函数，其用法如下：
+
+```
+DECODE(表达式, 搜索值1, 结果1, 搜索值2, 结果2, ..., 默认值)
+```
+
+如果我们需要当 `param` 为 1 的时候返回 one，为 2 的时候返回 two，其他情况返回 other：
+
+```sql
+select decode(param, 1, 'one', 2, 'two', 'other') from tbl;
+```
+
 ### 其他
 
 查询当前系统时间（相当于 MySQL 的  `select now();`）：
