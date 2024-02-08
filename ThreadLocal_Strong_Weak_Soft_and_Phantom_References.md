@@ -87,3 +87,13 @@ null
 java.lang.Object@13805618
 java.lang.Object@13805618
 ```
+
+## ThreadLocal 基础
+
+先看看 Spring 的 `@Transactional` 注解，它可以保证事务。
+
+假设在一个 `@Transactional` 注解的方法下，有两个方法，这两个方法都是注入的类的方法。
+
+如果要保证事务，那么这两个方法的数据库连接（Connection），肯定都是要同一个才行。而数据库连接（Connection）是从数据库的连接池那里取的。
+
+所以，当这个事务之内，任意一个方法，首次拿到数据库连接 Connection 的时候，会将 Connection 放到当前线程的 ThreadLocal 里面，接下来这个事务内的其他方法就都从 ThreadLocal 里面拿 Connection，这就保证了事务内用的是同一个数据库连接。
