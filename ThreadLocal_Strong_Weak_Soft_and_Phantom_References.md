@@ -147,3 +147,35 @@ ThreadLocalMap getMap(Thread t) {
 | 另一个ThreadLocal | 另一个对应存储的值 |
 | ...... | ...... |
 
+**ThreadLocalMap 存储的 ThreadLocal 是 WeakReference 弱引用**
+
+上文中的 ThreadLocalMap 的 `map.set(this, value);` 方法的源码里面有：
+
+```java
+private void set(ThreadLocal<?> key, Object value) {
+    // 省略...
+    tab[i] = new Entry(key, value);
+    // 省略...
+}
+```
+
+而 `new Entry(key, value)` 的 `Entry` 的源码部分截取如下：
+
+```java
+static class ThreadLocalMap {
+
+    static class Entry extends WeakReference<ThreadLocal<?>> {
+        Object value;
+
+        Entry(ThreadLocal<?> k, Object v) {
+            super(k);
+            value = v;
+        }
+    }
+}
+```
+
+也就是说，构造器 `Entry(ThreadLocal<?> k, Object v)` 因为继承了 `WeakReference` 弱引用，所以构造器实际上是将 `ThreadLocal` 作为参数构造了 `WeakReference` 。
+
+所以 `ThreadLocalMap` 的 key 存储的 `ThreadLocal` 实际上是 WeakReference 弱引用。
+
