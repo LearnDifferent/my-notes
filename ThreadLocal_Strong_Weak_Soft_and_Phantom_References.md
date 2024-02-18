@@ -97,3 +97,53 @@ java.lang.Object@13805618
 如果要保证事务，那么这两个方法的数据库连接（Connection），肯定都是要同一个才行。而数据库连接（Connection）是从数据库的连接池那里取的。
 
 所以，当这个事务之内，任意一个方法，首次拿到数据库连接 Connection 的时候，会将 Connection 放到当前线程的 ThreadLocal 里面，接下来这个事务内的其他方法就都从 ThreadLocal 里面拿 Connection，这就保证了事务内用的是同一个数据库连接。
+
+---
+
+**ThreadLocal 的线程隔离**
+
+假设有个 `ThreadLocal<String> tl = new ThreadLocal<>();` 表示每个线程都有一个自己的字符串。
+
+现在新建一个线程，专门储存当前的线程的名称：
+
+```java
+new Thread(() -> {
+    String currentThreadName = Thread.currentThread().getName();
+    tl.set(currentThreadName);
+}).start();
+```
+
+上面这个 `tl.set()` 的源码如下：
+
+```java
+public void set(T value) {
+    Thread t = Thread.currentThread();
+    // 以当前线程为参数，获取 ThreadLocalMap，
+    // 这个 ThreadLocalMap 实际上是当前线程的成员变量 threadLocals
+    ThreadLocalMap map = getMap(t);
+    if (map != null) {
+        // 这个 ThreadLocalMap 的 key 是当前的 ThreadLocal 实例，value 就是需要存储的值
+        map.set(this, value);
+    } else {
+        createMap(t, value);
+    }
+}
+
+ThreadLocalMap getMap(Thread t) {
+    // 每个线程都有自己的 ThreadLocalMap 类型的 threadLocals
+    return t.threadLocals;
+}
+```
+
+也就是说，每个线程都有自己的 `ThreadLocalMap threadLocals` 属性，这样就可以保证拿的时候也是拿自己线程里面的内容。
+
+在 ThreadLocalMap 中，key 是当前 ThreadLocal 的实例，也就是 `tl` 指向的 `new ThreadLocal<>()` 实例对象，而 value 才是需要保存在线程中的值。
+
+对任意一个 Thread 来说，它有一个 ThreadLocalMap，该 Thread 的 ThreadLocalMap 中，存储的内容如下：
+
+| key | value |
+| ---- | ---- |
+| 某个ThreadLocal | 对应存储的值 |
+| 另一个ThreadLocal | 另一个对应存储的值 |
+| ...... | ...... |
+
