@@ -147,6 +147,8 @@ ThreadLocalMap getMap(Thread t) {
 | 另一个ThreadLocal | 另一个对应存储的值 |
 | ...... | ...... |
 
+---
+
 **ThreadLocalMap 存储的 ThreadLocal 是 WeakReference 弱引用**
 
 上文中的 ThreadLocalMap 的 `map.set(this, value);` 方法的源码里面有：
@@ -178,4 +180,20 @@ static class ThreadLocalMap {
 也就是说，构造器 `Entry(ThreadLocal<?> k, Object v)` 因为继承了 `WeakReference` 弱引用，所以构造器实际上是将 `ThreadLocal` 作为参数构造了 `WeakReference` 。
 
 所以 `ThreadLocalMap` 的 key 存储的 `ThreadLocal` 实际上是 WeakReference 弱引用。
+
+---
+
+**ThreadLocalMap 里面的 ThreadLocal 使用 WeakReference 弱引用是为了防止内存泄漏，但是最好使用 `remove()` 方法移除当前 ThreadLocal 里面 ThreadLocalMap 的所有 key 和 value**
+
+以前的 JDK 是将 `ThreadLocalMap` 里面的当前 `ThreadLocal` 实例设置为 Strong Reference 强引用的，但是这样会产生问题。
+
+因为正常情况下，为了回收 `ThreadLocal`，一般会将 `ThreadLocal<String> tl = new ThreadLocal<>();` 的这个 `tl` 设置设置为 `null` 。
+
+但是这样只是让 `tl` 和 `new ThreadLocal<>()` 断开了引用，`ThreadLocalMap` 里面存储的 key（也就是 `ThreadLocal`）仍然指向了 `new ThreadLocal<>()` 实例。
+
+这也就造成了内存泄漏。如果有多个这样的 `ThreadLocal` 一直被很多个线程的 `ThreadLocalMap` 里面的 key 指向着，那么就可能会出现 OOM 内存溢出的问题。
+
+`ThreadLocalMap` 里面的 key 使用 WeakReference 弱引用的话，这个 key 指向的 `ThreadLocal` 实例就可以实现自动清除。
+
+但是这只是一个安全机制，只能保证 `ThreadLocalMap` 的 key 能被移除，而 value 其实还不会被移除。所以要记得使用 `ThreadLocal` 的 `remove()` 方法，移除当前 `ThreadLocal` 里面的 `ThreadLocalMap` 的所有 key 和 value。
 
