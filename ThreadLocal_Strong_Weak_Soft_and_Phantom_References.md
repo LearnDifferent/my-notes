@@ -2,7 +2,7 @@
 
 参考资料：[深入JDK源码全面解析ThreadLocal原理 - 马士兵](https://www.bilibili.com/video/BV1ZY4y1P799) （内容相同的视频：[巧用弱引用解决ThreadLocal内存泄漏问题 - 马士兵](https://www.bilibili.com/video/BV19H4y1U7Jc/)）
 
-## 强引用、软引用、弱引用和虚引用
+## 强引用 Strong Reference、软引用 Soft Reference 和弱引用 Weak Reference
 
 **强引用 Strong Reference**
 
@@ -197,3 +197,54 @@ static class ThreadLocalMap {
 
 但是这只是一个安全机制，只能保证 `ThreadLocalMap` 的 key 能被移除，而 value 其实还不会被移除。所以要记得使用 `ThreadLocal` 的 `remove()` 方法，移除当前 `ThreadLocal` 里面的 `ThreadLocalMap` 的所有 key 和 value。
 
+## 虚引用 Phantom Reference
+
+> Phantom Reference 虚引用，也称幽灵引用或者幻影引用
+
+Phantom Reference 使用方法如下：
+
+```java
+ReferenceQueue<Object> referenceQueue = new ReferenceQueue<>();
+PhantomReference<Object> phantomReference = new PhantomReference<>(new Object(), referenceQueue);
+```
+
+`new PhantomReference<>(new Object(), referenceQueue)` 中，`referenceQueue` 这个 Queue 是用来装 `new` 出来的 `PhantomReference` 对象的。
+
+也就是说，有一个 Queue 是 `referenceQueue`，`new PhantomReference` 被塞进这个 Queue 里面，而这个 `new PhantomReference` 将 `new Object()` 变为了 Phantom Reference。
+
+---
+
+Phantom Reference 在业务开发上基本用不到，它主要是给 GC 使用的。
+
+我们的 JVM 里面有堆内存，堆内存里面，有些对象会指向堆外内存，这些堆外内存是不归 JVM 直接管理的。
+
+这些堆内存里面，指向堆外内存的对象，在 GC 的时候，会被放到特殊的 Queue 里面，再通知 JVM 去处理。
+
+假设一个实际的应用场景，比如我们写一个网络程序，需要使用网卡的功能。
+
+OS 会将网卡的数据拷贝到 OS 的内存中，而我们的 JVM 如果不能直接操作 OS 内存中的网卡数据，就要再拷贝一次，将网卡数据也拷贝到 JVM 中。
+
+直接内存 Direct Memory 和零拷贝 Zero-Copy：
+
+ - 为了直接操作 OS 的内存，我们可以在 JVM 中的堆内存里面
+ - 指定一个对象，这个对象可以直接指向 OS 的内存区域
+ - 直接内存 Direct Memory 存储的就是这种类型的对象
+ - 这种机制被叫做零拷贝 Zero-Copy
+
+当我们用完了网卡的数据，想清理的时候，JVM 里面的堆内存的对象可以直接清理，但是堆外内存，也就是 OS 内存里面的网卡数据就不能 JVM 直接清理了。
+
+所以使用了 Phantom Reference 后，JVM 会将这个对象放在 Queue 中，需要清理的时候，会将 Queue 拿出来，依次清理里面的堆内存对象，并发出指令去清理其引用的堆外内存的对象。
+
+在 `java.nio` 包下面有 Direct Memory 和 Zero-Copy 以及 Phantom Reference 的应用。
+
+比如我们可以这样 `ByteBuffer buffer = ByteBuffer.allocateDirect(1024);` 分配一个直接内存。`ByteBuffer.allocateDirect()` 的源码如下：
+
+```java
+public static ByteBuffer allocateDirect(int capacity) {
+    return new DirectByteBuffer(capacity);
+}
+```
+
+这里面 `new` 出来的 `DirectByteBuffer` 有一个 `public Cleaner cleaner() { return cleaner; }` 方法。
+
+这个 `Cleaner` 类型实际上就是 `extends` 了 `PhantomReference<Object>` 的一个虚引用 Phantom Reference，清理的时候就可以将堆内存的对象，和堆外内存的对象一起清理了。
