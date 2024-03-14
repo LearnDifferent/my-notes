@@ -1,4 +1,4 @@
-# ThreadLocal 
+# ThreadLocal & Strong Reference & Soft Reference & Weak Reference & Phantom Reference & TransmittableThreadLocal & InheritableThreadLocal
 
 参考资料：[深入JDK源码全面解析ThreadLocal原理 - 马士兵](https://www.bilibili.com/video/BV1ZY4y1P799) （内容相同的视频：[巧用弱引用解决ThreadLocal内存泄漏问题 - 马士兵](https://www.bilibili.com/video/BV19H4y1U7Jc/)）
 
@@ -248,3 +248,156 @@ public static ByteBuffer allocateDirect(int capacity) {
 这里面 `new` 出来的 `DirectByteBuffer` 有一个 `public Cleaner cleaner() { return cleaner; }` 方法。
 
 这个 `Cleaner` 类型实际上就是 `extends` 了 `PhantomReference<Object>` 的一个虚引用 Phantom Reference，清理的时候就可以将堆内存的对象，和堆外内存的对象一起清理了。
+
+## TransmittableThreadLocal
+
+> 下文来自 AI
+
+问：单纯使用 ThreadLocal 会有什么问题？
+
+答：
+
+单纯使用 `ThreadLocal` 在多线程程序中尤其是在涉及线程池的情况下会遇到一些问题。`ThreadLocal` 提供了一种线程局部变量的存储机制，每个线程都可以通过它来存储自己的变量副本，这些变量对其他线程是隔离的。然而，当线程被线程池复用时，这些局部变量的处理就变得复杂了。以下是使用 `ThreadLocal` 可能遇到的一些问题：
+
+1. 内存泄露
+
+`ThreadLocal` 可能导致内存泄露。`ThreadLocal` 的实现是通过在 `Thread` 对象中保存一个 `ThreadLocal.ThreadLocalMap` 来实现的。如果一个 `ThreadLocal` 对象不再被使用，而线程继续存活，那么由于 `ThreadLocalMap` 持有 `ThreadLocal` 的强引用，这将导致 `ThreadLocal` 相关的对象无法被垃圾回收，从而可能导致内存泄露。这在使用静态的 `ThreadLocal` 变量时尤其需要注意。
+
+2. 值污染
+
+在使用线程池等会复用线程的情况下，如果线程局部变量没有在使用后被及时清理（例如调用 `ThreadLocal.remove()`），那么这个线程在之后被重新使用时，线程局部变量的值可能会“污染”后续的任务。也就是说，后续的任务可能会错误地访问到之前任务在 `ThreadLocal` 中遗留的数据。
+
+3. 复杂的并发环境下的数据不一致
+
+在复杂的并发环境下，特别是在微服务架构中，请求可能需要通过多个服务和多个线程进行处理。如果仅使用 `ThreadLocal` 来传递上下文信息（如用户认证信息），那么在异步调用或线程切换时，上下文信息可能会丢失，导致无法正确处理请求或数据不一致。
+
+4. 性能问题
+
+虽然 `ThreadLocal` 通常不会直接引起性能问题，但是不恰当的使用（如频繁地创建和销毁 `ThreadLocal` 对象，或者在每次使用后未调用 `remove()` 方法）可能会间接影响应用程序的性能，尤其是在高并发的环境下。
+
+解决方案：
+
+- **及时清理**：确保在每次使用 `ThreadLocal` 变量后及时调用 `remove()` 方法进行清理，避免值污染。
+- **使用 `TransmittableThreadLocal`**：对于需要在线程之间传递上下文信息的场景，可以使用 `TransmittableThreadLocal` 替代 `ThreadLocal`。`TransmittableThreadLocal` 保证了在使用线程池等并发组件时，上下文信息能够被正确传递和管理。
+- **慎重使用静态 `ThreadLocal`**：静态 `ThreadLocal` 变量更容易导致内存泄露，因此应该慎重使用，并确保及时清理。
+
+总之，虽然 `ThreadLocal` 是解决多线程程序中数据隔离问题的有力工具，但在使用时需要注意以上问题，并采取相应措施避免这些问题。
+
+---
+
+> 下文来自 AI
+
+问：[这里](https://github.com/yangzongzhuan/RuoYi-Cloud/blob/master/ruoyi-common/ruoyi-common-core/src/main/java/com/ruoyi/common/core/context/SecurityContextHolder.java) 为什么要使用 `TransmittableThreadLocal` ？
+
+```java
+package com.ruoyi.common.core.context;
+
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import com.alibaba.ttl.TransmittableThreadLocal;
+import com.ruoyi.common.core.constant.SecurityConstants;
+import com.ruoyi.common.core.text.Convert;
+import com.ruoyi.common.core.utils.StringUtils;
+
+/**
+ * 获取当前线程变量中的 用户id、用户名称、Token等信息 
+ * 注意： 必须在网关通过请求头的方法传入，同时在HeaderInterceptor拦截器设置值。 否则这里无法获取
+ *
+ * @author ruoyi
+ */
+public class SecurityContextHolder
+{
+    private static final TransmittableThreadLocal<Map<String, Object>> THREAD_LOCAL = new TransmittableThreadLocal<>();
+
+    public static void set(String key, Object value)
+    {
+        Map<String, Object> map = getLocalMap();
+        map.put(key, value == null ? StringUtils.EMPTY : value);
+    }
+
+    public static String get(String key)
+    {
+        Map<String, Object> map = getLocalMap();
+        return Convert.toStr(map.getOrDefault(key, StringUtils.EMPTY));
+    }
+
+    public static <T> T get(String key, Class<T> clazz)
+    {
+        Map<String, Object> map = getLocalMap();
+        return StringUtils.cast(map.getOrDefault(key, null));
+    }
+
+    public static Map<String, Object> getLocalMap()
+    {
+        Map<String, Object> map = THREAD_LOCAL.get();
+        if (map == null)
+        {
+            map = new ConcurrentHashMap<String, Object>();
+            THREAD_LOCAL.set(map);
+        }
+        return map;
+    }
+
+    public static void setLocalMap(Map<String, Object> threadLocalMap)
+    {
+        THREAD_LOCAL.set(threadLocalMap);
+    }
+
+    public static Long getUserId()
+    {
+        return Convert.toLong(get(SecurityConstants.DETAILS_USER_ID), 0L);
+    }
+
+    public static void setUserId(String account)
+    {
+        set(SecurityConstants.DETAILS_USER_ID, account);
+    }
+
+    public static String getUserName()
+    {
+        return get(SecurityConstants.DETAILS_USERNAME);
+    }
+
+    public static void setUserName(String username)
+    {
+        set(SecurityConstants.DETAILS_USERNAME, username);
+    }
+
+    public static String getUserKey()
+    {
+        return get(SecurityConstants.USER_KEY);
+    }
+
+    public static void setUserKey(String userKey)
+    {
+        set(SecurityConstants.USER_KEY, userKey);
+    }
+
+    public static String getPermission()
+    {
+        return get(SecurityConstants.ROLE_PERMISSION);
+    }
+
+    public static void setPermission(String permissions)
+    {
+        set(SecurityConstants.ROLE_PERMISSION, permissions);
+    }
+
+    public static void remove()
+    {
+        THREAD_LOCAL.remove();
+    }
+}
+```
+
+答：
+
+`TransmittableThreadLocal` 是阿里巴巴开源的一个 Java 库 [Transmittable ThreadLocal (TTL)](https://github.com/alibaba/transmittable-thread-local) 的一部分，它扩展了 Java 标准库中的 `ThreadLocal`，使其不仅能够保持线程局部变量的值，而且还能在使用线程池等会复用线程的场景中，正确地传递这些线程局部变量。
+
+在并发编程中，`ThreadLocal` 用于在当前线程中保存变量，这样不同的线程可以保持自己独立的变量副本，互不干扰。这在处理用户会话或事务的上下文信息时非常有用。然而，当使用线程池等JUC并发工具时，线程是被复用的，这意味着一个线程可能会依次执行多个任务。由于 `ThreadLocal` 无法自动处理线程间的值传递，当一个新任务提交给线程池时，这个任务可能看到之前任务留下的上下文信息，这可能导致数据错乱或安全问题。
+
+`TransmittableThreadLocal` 解决了这个问题。它提供了一种机制，能够在任务提交给线程池执行时，自动捕获从父线程继承的 `ThreadLocal` 值，并在任务执行前后，分别恢复和清理这些值。这样，即使在并发环境下，也能保证线程局部变量的正确传递和隔离。
+
+在你提供的 `SecurityContextHolder` 类中使用 `TransmittableThreadLocal` 而不是普通的 `ThreadLocal`，是为了确保在使用线程池等并发执行环境时，当前线程变量中的用户ID、用户名称、Token等敏感信息能够正确地管理和传递。这对于维护一个安全的、多用户的系统尤其重要，特别是在微服务架构中，服务之间的调用往往涉及到异步处理和任务调度，`TransmittableThreadLocal` 确保了上下文信息（如安全凭证）的正确传递，避免了安全漏洞和数据一致性问题。
+
+简而言之，使用 `TransmittableThreadLocal` 是为了在复杂的并发和异步执行环境中，安全、正确地处理线程局部变量，特别是那些关键的上下文信息，如用户身份标识和权限信息。
