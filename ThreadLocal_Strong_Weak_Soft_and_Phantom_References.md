@@ -401,3 +401,298 @@ public class SecurityContextHolder
 在你提供的 `SecurityContextHolder` 类中使用 `TransmittableThreadLocal` 而不是普通的 `ThreadLocal`，是为了确保在使用线程池等并发执行环境时，当前线程变量中的用户ID、用户名称、Token等敏感信息能够正确地管理和传递。这对于维护一个安全的、多用户的系统尤其重要，特别是在微服务架构中，服务之间的调用往往涉及到异步处理和任务调度，`TransmittableThreadLocal` 确保了上下文信息（如安全凭证）的正确传递，避免了安全漏洞和数据一致性问题。
 
 简而言之，使用 `TransmittableThreadLocal` 是为了在复杂的并发和异步执行环境中，安全、正确地处理线程局部变量，特别是那些关键的上下文信息，如用户身份标识和权限信息。
+
+## InheritableThreadLocal
+
+> 下文整理自 AI
+
+`ThreadLocal` 与 `InheritableThreadLocal` 的对比：
+
+```java
+public class InheritableThreadLocalExample {
+    
+    private static final ThreadLocal<String> THREAD_LOCAL = new ThreadLocal<>();
+    private static final InheritableThreadLocal<String> INHERITABLE_THREAD_LOCAL = new InheritableThreadLocal<>();
+
+    public static void main(String[] args) {
+        THREAD_LOCAL.set("[THREAD_LOCAL] Value from parent thread");
+        INHERITABLE_THREAD_LOCAL.set("[INHERITABLE_THREAD_LOCAL] Value from parent thread");
+
+        Thread childThread1 = new Thread(() -> {
+            System.out.println("Child thread1 value: " + THREAD_LOCAL.get());
+            THREAD_LOCAL.remove();
+        });
+
+        Thread childThread2 = new Thread(() -> {
+            System.out.println("Child thread2 value: " + INHERITABLE_THREAD_LOCAL.get());
+            INHERITABLE_THREAD_LOCAL.remove();
+        });
+
+        childThread1.start();
+        childThread2.start();
+    }
+}
+```
+
+打印结果：
+
+```
+Child thread1 value: null
+Child thread2 value: [INHERITABLE_THREAD_LOCAL] Value from parent thread
+```
+
+打印的结果说明，如果使用 `ThreadLocal`，那么子线程无法获取父线程的 `ThreadLocal` 的值。相反， `InheritableThreadLocal` 就可以。
+
+---
+
+问： `InheritableThreadLocal` 如果在子线程被修改，那父线程的数据也会变吗？
+
+答：
+
+不会。在 Java 中，`InheritableThreadLocal` 允许子线程“继承”父线程的局部变量值，但这种“继承”是通过复制父线程中的值到子线程来实现的。一旦这个值被复制，父线程和子线程中的 `InheritableThreadLocal` 实例就持有了两份独立的数据。因此，如果子线程修改了它持有的 `InheritableThreadLocal` 中的数据，这个修改不会影响到父线程中的数据，反之亦然。
+
+工作原理：
+
+- 当一个新的线程（子线程）被创建时，Java 虚拟机会检查创建它的线程（父线程）是否有任何 `InheritableThreadLocal` 变量。
+- 如果有，那么这些变量的当前值会被复制到新线程中。这个复制过程是值的复制，而不是引用的复制
+
+让我们通过一个简单的示例来说明这一点：
+
+```java
+public class InheritableThreadLocalExample {
+
+    private static final InheritableThreadLocal<String> INHERITABLE_THREAD_LOCAL = new InheritableThreadLocal<>();
+
+    public static void main(String[] args) {
+        String value = "Original value";
+        INHERITABLE_THREAD_LOCAL.set(value);
+
+        new Thread(() -> {
+            String childThreadValue = INHERITABLE_THREAD_LOCAL.get();
+            System.out.println("Before modification in child thread: " + childThreadValue);
+
+            // 修改子线程中的变量值
+            childThreadValue = "Modified value";
+            System.out.println("After modification in child thread: " + childThreadValue);
+        }).start();
+
+        // 给子线程一点时间进行修改
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 查看父线程中的变量值是否被修改
+        System.out.println("Value in parent thread: " + INHERITABLE_THREAD_LOCAL.get());
+    }
+}
+```
+
+输出结果如下：
+
+```
+Before modification in child thread: Original value
+After modification in child thread: Modified value
+Value in parent thread: Original value
+```
+
+也就是说，使用 `InheritableThreadLocal` 的时候，父线程的线程变量会通过 <u>值传递</u> 的方式复制给子线程。
+
+注意：虽然是值传递，但是如果是可变对象（Mutable Objects）的话，传递的是内存地址。所以如果是可变对象，那么子线程是可以对可变对象进行修改的。
+
+这就涉及到两个概念：
+
+- **数据隔离**：虽然 `InheritableThreadLocal` 允许父线程和子线程共享变量，但如果变量指向的是可变对象（如列表或映射），则需要注意，父线程和子线程实际上共享同一个对象实例。这可能导致意外的数据污染，即一个线程对对象的修改会影响到另一个线程。
+- **深拷贝**：为了避免上述的数据污染问题，当需要在父子线程之间共享可变对象时，应该在 `InheritableThreadLocal` 的 `childValue` 方法中实现对象的深拷贝，以确保父线程和子线程操作的是两个独立的对象副本。
+
+对于可变对象来说，如果希望子线程不是单纯复制对象的内存地址，而是 <u>深拷贝</u> 的话：
+
+```java
+import java.util.ArrayList;
+
+public class InheritableThreadLocalExample {
+
+    // 使用 InheritableThreadLocal 并重写 childValue 方法以实现深拷贝
+    // 如果没有重写 childValue 方法，那么子线程对 InheritableThreadLocal 的修改是会影响到父线程的 InheritableThreadLocal
+    private static final InheritableThreadLocal<ArrayList<String>> INHERITABLE_THREAD_LOCAL =
+            new InheritableThreadLocal<ArrayList<String>>() {
+                @Override
+                protected ArrayList<String> childValue(ArrayList<String> parentValue) {
+                    // 这里实现了 ArrayList 的深拷贝
+                    return parentValue == null ? null : new ArrayList<>(parentValue);
+                }
+            };
+
+    public static void main(String[] args) {
+        // 父线程中设置初始值
+        ArrayList<String> list = new ArrayList<>();
+        list.add("Initial Value");
+        INHERITABLE_THREAD_LOCAL.set(list);
+
+        System.out.println("Parent thread initial value: " + INHERITABLE_THREAD_LOCAL.get());
+
+        Thread childThread = new Thread(() -> {
+            System.out.println("Child thread value before modification: " + INHERITABLE_THREAD_LOCAL.get());
+
+            // 子线程中修改列表
+            INHERITABLE_THREAD_LOCAL.get().add("Modified by child thread");
+            System.out.println("Child thread value after modification: " + INHERITABLE_THREAD_LOCAL.get());
+        });
+
+        childThread.start();
+
+        // 等待子线程完成，确保输出有序
+        try {
+            childThread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        // 查看父线程中的列表是否受到影响
+        System.out.println("Parent thread value after child thread execution: " + INHERITABLE_THREAD_LOCAL.get());
+    }
+}
+```
+
+输出结果：
+
+```
+Parent thread initial value: [Initial Value]
+Child thread value before modification: [Initial Value]
+Child thread value after modification: [Initial Value, Modified by child thread]
+Parent thread value after child thread execution: [Initial Value]
+```
+
+在例子里，使用了 `InheritableThreadLocal` 来传递一个 `ArrayList<String>` 对象从父线程到子线程，并在 `childValue` 方法中实现了深拷贝。这样，子线程中对列表的修改不会影响父线程中的列表，保持了数据的隔离性。
+
+---
+
+> 下文来自 AI
+
+问： `InheritableThreadLocal` 和 `TransmittableThreadLocal` 的关联是？
+
+答：
+
+`InheritableThreadLocal` 和 `TransmittableThreadLocal` 都是解决 Java 多线程编程中线程间上下文传递问题的工具，但它们解决这一问题的方式和适用的场景有所不同。
+
+InheritableThreadLocal：
+
+- `InheritableThreadLocal` 是 Java 标准库提供的一个类，它扩展自 `ThreadLocal`。`ThreadLocal` 用于为每个线程提供一个变量的副本，使得每个线程可以独立地修改自己的副本而不影响其他线程。而 `InheritableThreadLocal` 的特点是允许子线程访问在父线程中设置的值。简单来说，当一个线程创建一个子线程时，`InheritableThreadLocal` 会将父线程中的变量副本传递给子线程。
+- `InheritableThreadLocal` 适用于简单的父子线程场景，但在现代复杂的多线程应用中，尤其是涉及线程池的使用时，`InheritableThreadLocal` 会遇到问题。因为线程池中的线程是被重用的，这意味着线程池中的线程并不总是作为新创建的子线程执行，它们不会从创建它们的父线程继承 `InheritableThreadLocal` 变量。
+
+TransmittableThreadLocal:：
+
+- `TransmittableThreadLocal` 是由阿里巴巴开源的一个库 [Transmittable Thread Local (TTL)](https://github.com/alibaba/transmittable-thread-local) 提供的，用于解决 `InheritableThreadLocal` 在异步编程和线程池使用场景中的局限性。`TransmittableThreadLocal` 在 `InheritableThreadLocal` 的基础上，提供了一种机制，能够在使用线程池等并发组件时，正确地传递线程局部变量，包括在任务提交给线程池执行前后，以及线程间的任务调度时。
+- `TransmittableThreadLocal` 通过包装 `Runnable` 和 `Callable` 任务，捕获在提交任务时线程上下文（`ThreadLocal`/`InheritableThreadLocal` 的值），然后在任务执行前将这些上下文值恢复到执行任务的线程上，任务执行后再清理这些上下文值。这样，即使在复杂的并发和异步执行环境下，也能保证上下文信息（如用户身份、事务上下文等）的正确传递和隔离。
+
+关联与区别：
+
+- **关联**：`TransmittableThreadLocal` 在 `InheritableThreadLocal` 的基础思想上进行了扩展，以适应更复杂的多线程使用场景，尤其是在异步编程和线程池的使用上。
+- **区别**：`InheritableThreadLocal` 适用于简单的父子线程场景，但在线程池重用线程的场景下存在局限。`TransmittableThreadLocal` 解决了这一局限性，提供了一种在现代多线程和异步编程环境中正确传递线程局部变量的解决方案。
+
+总结来说，`TransmittableThreadLocal` 是对 `InheritableThreadLocal` 功能的增强，用于解决在并发编程中线程局部变量传递的问题，特别是在涉及线程池等并发组件的复杂场景下。
+
+---
+
+> 下文来自 AI 问答
+
+问：InheritableThreadLocal 是怎么实现继承父线程中线程局部变量的功能的？
+
+答：
+
+`InheritableThreadLocal` 实现父线程向子线程传递线程局部变量的功能，主要依赖于 Java 的 `Thread` 类中的继承性上下文机制。具体实现方式如下：
+
+Thread 类中的 InheritableThreadLocalMap：
+
+- Java 的 `Thread` 类有两个与 `ThreadLocal` 相关的内部字段：一个是 `threadLocals`，用于存储普通的 `ThreadLocal` 变量；另一个是 `inheritableThreadLocals`，用于存储 `InheritableThreadLocal` 变量。这两个字段都是 `ThreadLocal.ThreadLocalMap` 类型，但只有 `inheritableThreadLocals` 被用来实现父子线程之间的变量传递。
+
+创建子线程时的变量传递过程：
+
+- 当一个新的线程被创建时，Java 虚拟机会调用 `Thread` 类的构造函数。在这个构造函数中，会检查创建新线程的当前线程（即父线程）是否包含 `inheritableThreadLocals`。如果包含，那么这个 `inheritableThreadLocals` 将被复制到新线程中，实现了从父线程到子线程的变量传递。这个复制过程是通过调用 `InheritableThreadLocal` 类中的 `childValue` 方法来完成的，该方法允许对继承的值进行修改或替换。
+
+InheritableThreadLocal 的 childValue 方法
+
+- `InheritableThreadLocal` 类提供了一个受保护的 `childValue` 方法，该方法允许开发者定制子线程从父线程继承的变量值。默认情况下，`childValue` 方法只是简单地返回父线程中的值。然而，开发者可以通过覆盖这个方法来实现自定义的继承逻辑，例如，根据特定的需求修改子线程继承的值。
+
+注意事项：虽然 `InheritableThreadLocal` 提供了一种方便的方式来实现线程间的数据传递，但在使用线程池等并发编程环境中需要小心，因为线程池中的线程通常会被重用，这可能导致预期之外的数据共享问题。为了解决这个问题，可以考虑使用阿里巴巴开源的 `TransmittableThreadLocal`，它在 `InheritableThreadLocal` 的基础上提供了更加灵活和安全的线程局部变量传递机制，特别适合于并发和异步编程环境。
+
+---
+
+> 下文来自 AI 问答
+
+问： `InheritableThreadLocal` 具体怎么配置？
+
+答：
+
+`InheritableThreadLocal` 在 Java 中是一个内建的类，用于创建线程局部变量，其值可以从父线程传递到子线程。这与普通的 `ThreadLocal` 类似，但 `InheritableThreadLocal` 允许子线程访问在父线程中设置的值。由于 `InheritableThreadLocal` 是 Java 标准库的一部分，它本身不需要通过配置来使用，而是通过编码实现的。
+
+然而，在 Spring Boot 或其他框架中，如果你想要确保异步执行的任务能够继承父线程的上下文（例如，安全上下文、数据库事务上下文等），你可能需要一些额外的配置，尤其是当使用 `@Async` 注解或者配置自定义的 `TaskExecutor` 时。以下是一些如何在 Spring 环境中使用类似 `InheritableThreadLocal` 功能的方法：
+
+1. 使用 `@Async` 与 `InheritableThreadLocal`
+
+Spring 框架没有直接提供一个配置选项来启用 `InheritableThreadLocal`。当使用 `@Async` 注解进行异步方法调用时，由于方法可能会在不同的线程中执行，这可能导致 `InheritableThreadLocal` 中的值不会自动传递给这些异步方法。一种解决方法是自定义一个 `Executor`，它能够包装任务以传递 `ThreadLocal` 的值。
+
+2. 自定义 `Executor` 以使用 `InheritableThreadLocal`
+
+你可以创建一个自定义的 `Executor` 或者 `TaskExecutor` 实现，这个实现会使用 `InheritableThreadLocal` 来确保父线程中的上下文能被子线程继承。以下是一个简单的示例：
+
+```java
+import java.util.concurrent.Executor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.core.task.TaskDecorator;
+
+public class InheritableThreadLocalExecutor extends ThreadPoolTaskExecutor {
+
+    public InheritableThreadLocalExecutor() {
+        super();
+        // 设置 TaskDecorator 来传递 InheritableThreadLocal
+        this.setTaskDecorator(new ContextCopyingDecorator());
+    }
+
+    private static class ContextCopyingDecorator implements TaskDecorator {
+        @Override
+        public Runnable decorate(Runnable runnable) {
+            // 在这里捕获父线程的 InheritableThreadLocal 值
+            Map<String, Object> context = MyContextHolder.getContext().deepCopy();
+            return () -> {
+                try {
+                    // 在子线程中设置上下文
+                    MyContextHolder.getContext().set(context);
+                    runnable.run();
+                } finally {
+                    // 清理操作
+                    MyContextHolder.getContext().clear();
+                }
+            };
+        }
+    }
+}
+```
+
+在这个示例中，`MyContextHolder` 是一个假设的类，用于管理你的 `InheritableThreadLocal` 上下文。`ContextCopyingDecorator` 是一个 `TaskDecorator`，它在任务执行前后对上下文进行设置和清理。
+
+3. 在 Spring Boot 中配置自定义 `Executor`
+
+一旦你定义了自定义的 `Executor`，你可以在 Spring Boot 的配置类中将其注册为 Bean，以便 Spring 使用它来处理 `@Async` 注解标记的方法：
+
+```java
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+@Configuration
+@EnableAsync
+public class AsyncConfig {
+
+    @Bean(name = "taskExecutor")
+    public Executor taskExecutor() {
+        return new InheritableThreadLocalExecutor();
+    }
+}
+```
+
+通过这种方式，你可以确保在使用 Spring 的 `@Async` 功能时，父线程中的上下文（通过 `InheritableThreadLocal` 管理）能够正确地传递到异步执行的任务中。
+
+> 注意事项：使用 `InheritableThreadLocal` 虽然方便，但在某些情况下可能会引入意外的行为，尤其是在复杂的并发场景或者使用线程池（线程复用）的情况下。确保你清楚地了解了其使用场景，并在必要时进行适当的上下文清理。
