@@ -566,6 +566,14 @@ Parent thread value after child thread execution: [Initial Value]
 
 在例子里，使用了 `InheritableThreadLocal` 来传递一个 `ArrayList<String>` 对象从父线程到子线程，并在 `childValue` 方法中实现了深拷贝。这样，子线程中对列表的修改不会影响父线程中的列表，保持了数据的隔离性。
 
+`childValue` 方法：
+
+- `InheritableThreadLocal` 类中的 `childValue` 方法是实现这种继承行为的关键。
+- 当一个新的子线程被创建时，`InheritableThreadLocal` 会自动为这个新线程调用 `childValue` 方法，以确定子线程中的初始值。
+- 这个方法接收的参数是父线程中的值，并返回一个值，该值将作为子线程中的初始值。
+
+默认情况下，`childValue` 方法直接返回其参数，即子线程继承的值与父线程中的值相同。 但是可以通过覆盖 `childValue` 方法来自定义子线程应该接收的值，这为不同的继承策略提供了灵活性。
+
 ---
 
 > 下文来自 AI
