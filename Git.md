@@ -809,6 +809,10 @@ git commit --amend --date="$(新的时间)" -C $(需要修改的 commit 的标�
 - [修改 git 提交的时间 - xkcoding 的代码成长日记](https://xkcoding.com/2019/01/21/modify-git-commit-timestamp.html)
 - [git 修改上次git commit的时间](https://blog.csdn.net/guoyajie1990/article/details/73824732)
 
+## 修改 commit 的 author 信息
+
+参考：https://juejin.cn/post/7238498384913547321
+
 # 查看 Log 和仓库内的文件
 
 log 只显示一行：
