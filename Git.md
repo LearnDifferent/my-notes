@@ -813,6 +813,48 @@ git commit --amend --date="$(新的时间)" -C $(需要修改的 commit 的标�
 
 参考：https://juejin.cn/post/7238498384913547321
 
+## 取消跟踪已经 commit 了的文件
+
+> 下文来自 ChatGPT 4
+
+如果您已经使用 `git commit` 提交了一个文件，并且希望取消对这个文件的 Git 跟踪，您需要执行几个步骤。这通常意味着您想要从版本控制中完全移除这个文件，但保留其在工作目录中的副本。以下是步骤：
+
+1. **从 Git 仓库中删除文件，但保留其在工作目录中的副本**：
+   使用 `git rm --cached` 命令。`--cached` 选项告诉 Git 保留工作目录中的文件副本，但停止跟踪它。假设文件名为 `file.txt`，则命令如下：
+
+```bash
+git rm --cached file.txt
+```
+
+如果是要停止跟踪某个目录及其下所有文件，可以添加 `-r` 选项：
+
+```bash
+git rm --cached -r folder_name/
+```
+
+2. **更新 `.gitignore` 以防止将来跟踪该文件**：
+   将文件或文件夹的路径添加到项目根目录下的 `.gitignore` 文件中。这会告诉 Git 忽略这些文件的未来更改。打开或创建一个 `.gitignore` 文件并添加对应的行：
+
+```
+file.txt
+folder_name/
+```
+
+3. **提交更改**：
+   删除文件后并更新 `.gitignore`，您需要提交这些更改。首先，添加 `.gitignore` 文件：
+
+```bash
+git add .gitignore
+```
+
+然后，提交更改：
+
+```bash
+git commit -m "Stop tracking file.txt and update .gitignore"
+```
+
+这样，`file.txt` 将不再被 Git 跟踪，而且由于 `.gitignore` 的更新，未来对这些文件的任何更改都不会被包括在 Git 提交中。请注意，这些操作不会影响远程仓库中已存在的文件，直到您推送这次更改。如果您想从远程仓库中也删除这个文件，需要进行额外的 `git push` 操作。
+
 # 查看 Log 和仓库内的文件
 
 log 只显示一行：
