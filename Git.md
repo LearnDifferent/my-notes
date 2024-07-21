@@ -165,6 +165,20 @@ git reset HEAD # 所有文件
 git checkout -- [文件名或 . 表示全部文件]
 ```
 
+## 已经被 git 跟踪的文件，在加入 .gitignore 之后怎么停止跟踪？
+
+因为 .gitignore 只会影响新的且未被跟踪的文件，所以如果一个文件已经被 git 跟踪了，.gitignore 并不会让 git 停止跟踪。
+
+手动停止跟踪文件：
+
+```bash
+git rm -r --cached [文件名]
+```
+
+这样的话，就相当于告诉 git 不要跟踪了，但是本地文件不会因此被删除（也就是我们希望达成的效果）。其中 `-r` 表示 allow recursive removal，`--cached` 表示清除缓存，也就是停止跟踪。
+
+然后 `git commit` 提交这个停止跟踪的 commit 即可。
+
 # Stash（暂时藏起来）
 
 ## git stash 指令
